@@ -106,3 +106,27 @@ def test_run_skips_task_with_empty_content() -> None:
 
     client.update_content.assert_not_called()
     assert summary.updated == 0
+
+
+from datetime import datetime as _dt
+
+
+def test_run_handles_datetime_in_deadline_field() -> None:
+    """The SDK's ApiDue Union allows datetime; ensure we narrow to date."""
+    today = date(2026, 4, 29)
+    task = MagicMock(
+        id="dt",
+        content="Renew passport",
+        deadline=MagicMock(date=_dt(2026, 5, 14, 12, 0, 0)),
+    )
+    client = MagicMock()
+    client.list_deadlined_tasks.return_value = [task]
+    client.list_suffixed_tasks.return_value = []
+
+    summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
+
+    client.update_content.assert_called_once_with(
+        task_id="dt", content="Renew passport [T-2w]"
+    )
+    assert summary.updated == 1
+    assert summary.errors == 0
