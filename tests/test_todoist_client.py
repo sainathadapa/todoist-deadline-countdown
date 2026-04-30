@@ -107,3 +107,29 @@ def test_update_content_calls_sdk_update_task(mock_api_cls: MagicMock) -> None:
     client.update_content(task_id="42", content="Hello [T-1d]")
 
     api.update_task.assert_called_once_with(task_id="42", content="Hello [T-1d]")
+
+
+@patch("countdown.todoist_client.TodoistAPI")
+def test_list_suffixed_tasks_dedupes_when_task_appears_in_both_searches(
+    mock_api_cls: MagicMock,
+) -> None:
+    api = mock_api_cls.return_value
+    # The same task object is returned by BOTH searches — this can happen if a
+    # title contains both a `T-` substring elsewhere AND a final `[T+1d]` suffix.
+    same_task = MagicMock(id="DUPE", content="meeting [T+1d]")
+
+    def filter_side_effect(query: str):
+        if query == "search: T-":
+            return iter([[same_task]])
+        if query == "search: T+":
+            return iter([[same_task]])
+        raise AssertionError(f"unexpected query: {query}")
+
+    api.filter_tasks.side_effect = filter_side_effect
+
+    client = TodoistClient(token="t")
+    tasks = client.list_suffixed_tasks()
+
+    # Despite appearing in both searches, the task is returned exactly once.
+    assert len(tasks) == 1
+    assert tasks[0].id == "DUPE"
