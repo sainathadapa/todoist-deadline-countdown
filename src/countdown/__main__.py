@@ -30,6 +30,8 @@ def _parse_deadline(task) -> date | None:
     raw = getattr(task.deadline, "date", None)
     if raw is None:
         return None
+    if isinstance(raw, datetime):
+        return raw.date()
     if isinstance(raw, date):
         return raw
     try:
