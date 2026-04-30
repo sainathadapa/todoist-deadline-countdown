@@ -105,6 +105,25 @@ def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
     return summary
 
 
+def _write_step_summary(summary: Summary, dry_run: bool) -> None:
+    """Append a markdown summary card to $GITHUB_STEP_SUMMARY if running in CI."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    suffix = " (dry-run — nothing written)" if dry_run else ""
+    md = (
+        f"## Countdown run{suffix}\n\n"
+        f"| Scanned | Updated | Stripped | Errors |\n"
+        f"|---|---|---|---|\n"
+        f"| {summary.scanned} | {summary.updated} | {summary.stripped} | {summary.errors} |\n"
+    )
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(md)
+    except OSError as exc:
+        log.warning("Could not write step summary: %s", exc)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(argv) if argv is not None else sys.argv[1:]
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -139,6 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     dry_run = os.environ.get("DRY_RUN") == "1"
 
     summary = run(client=client, today=today, tz=tz, dry_run=dry_run)
+    _write_step_summary(summary, dry_run=dry_run)
     return 0 if summary.errors == 0 else 1
 
 

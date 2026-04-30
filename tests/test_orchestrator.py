@@ -152,6 +152,44 @@ def test_main_doctor_subcommand_prints_user_and_returns_zero(
     assert "America/New_York" in out
 
 
+def test_write_step_summary_renders_table_to_github_step_summary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from countdown.__main__ import Summary, _write_step_summary
+
+    summary_file = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+
+    _write_step_summary(Summary(scanned=12, updated=3, stripped=1, errors=0), dry_run=False)
+
+    text = summary_file.read_text(encoding="utf-8")
+    assert "Countdown run" in text
+    assert "| 12 | 3 | 1 | 0 |" in text
+
+
+def test_write_step_summary_marks_dry_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from countdown.__main__ import Summary, _write_step_summary
+
+    summary_file = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+
+    _write_step_summary(Summary(scanned=2, updated=2, stripped=0, errors=0), dry_run=True)
+
+    assert "dry-run" in summary_file.read_text(encoding="utf-8")
+
+
+def test_write_step_summary_noop_when_env_not_set(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from countdown.__main__ import Summary, _write_step_summary
+
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    # Should not raise even though no path is set.
+    _write_step_summary(Summary(), dry_run=False)
+
+
 def test_main_strip_all_strips_marker_from_every_marked_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
