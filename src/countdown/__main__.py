@@ -120,6 +120,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Token OK. User timezone (per Todoist): {tz}")
         return 0
 
+    if argv and argv[0] == "--strip-all":
+        errors = 0
+        for task in client.list_suffixed_tasks():
+            new_content = strip_suffix(task.content)
+            if new_content == task.content:
+                continue
+            try:
+                client.update_content(task_id=task.id, content=new_content)
+                log.info('[strip] %s "%s" -> "%s"', task.id, task.content, new_content)
+            except Exception as exc:  # noqa: BLE001
+                log.error("[error] %s %s", task.id, exc)
+                errors += 1
+        return 0 if errors == 0 else 1
+
     tz = resolve_timezone(client)
     today = datetime.now(tz).date()
     dry_run = os.environ.get("DRY_RUN") == "1"

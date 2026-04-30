@@ -150,3 +150,25 @@ def test_main_doctor_subcommand_prints_user_and_returns_zero(
     assert rc == 0
     out = capsys.readouterr().out
     assert "America/New_York" in out
+
+
+def test_main_strip_all_strips_suffix_from_every_marked_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TODOIST_API_TOKEN", "test-token")
+
+    suffixed = [
+        MagicMock(id="A", content="task one [T-2w]"),
+        MagicMock(id="B", content="task two [T+1d]"),
+    ]
+    fake_client = MagicMock()
+    fake_client.list_suffixed_tasks.return_value = suffixed
+
+    with patch("countdown.__main__.TodoistClient", return_value=fake_client):
+        from countdown.__main__ import main
+        rc = main(["--strip-all"])
+
+    assert rc == 0
+    fake_client.update_content.assert_any_call(task_id="A", content="task one")
+    fake_client.update_content.assert_any_call(task_id="B", content="task two")
+    assert fake_client.update_content.call_count == 2
