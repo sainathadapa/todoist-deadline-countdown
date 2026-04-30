@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from itertools import chain
+from typing import Callable, TypeVar
 
 import requests
 from todoist_api_python.api import TodoistAPI
@@ -10,6 +12,49 @@ from todoist_api_python.api import TodoistAPI
 from countdown.format import SUFFIX_RE
 
 SYNC_URL = "https://api.todoist.com/sync/v9/sync"
+
+T = TypeVar("T")
+
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+
+def retry_with_backoff(
+    fn: Callable[[], T],
+    *,
+    max_attempts: int = 3,
+    sleep: Callable[[float], None] = time.sleep,
+) -> T:
+    """Run `fn`, retrying on 5xx and 429. Re-raise on 4xx (except 429).
+
+    Backoff: 1s, 4s, 16s. For 429, prefer the `Retry-After` header.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return fn()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status not in RETRYABLE_STATUS:
+                raise
+            last_exc = exc
+            if attempt == max_attempts:
+                break
+            wait = _retry_after_seconds(exc) or (4 ** (attempt - 1))
+            sleep(wait)
+    assert last_exc is not None
+    raise last_exc
+
+
+def _retry_after_seconds(exc: requests.HTTPError) -> float | None:
+    if exc.response is None:
+        return None
+    raw = exc.response.headers.get("Retry-After")
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
 
 
 def _flatten(pages):
@@ -27,28 +72,34 @@ class TodoistClient:
 
         Returns None if the response lacks tz_info.
         """
-        response = requests.post(
-            SYNC_URL,
-            headers={"Authorization": f"Bearer {self._token}"},
-            data={"sync_token": "*", "resource_types": '["user"]'},
-            timeout=30,
-        )
-        response.raise_for_status()
+        def _do():
+            response = requests.post(
+                SYNC_URL,
+                headers={"Authorization": f"Bearer {self._token}"},
+                data={"sync_token": "*", "resource_types": '["user"]'},
+                timeout=30,
+            )
+            response.raise_for_status()
+            return response
+
+        response = retry_with_backoff(_do)
         user = response.json().get("user", {})
         tz_info = user.get("tz_info") or {}
         return tz_info.get("timezone")
 
     def list_deadlined_tasks(self):
-        pages = self._api.filter_tasks(query="deadline before: 5 years from now")
-        return _flatten(pages)
+        return retry_with_backoff(
+            lambda: _flatten(self._api.filter_tasks(query="deadline before: 5 years from now"))
+        )
 
     def list_suffixed_tasks(self):
         seen: dict[str, object] = {}
         for query in ("search: T-", "search: T+"):
-            for task in _flatten(self._api.filter_tasks(query=query)):
+            tasks = retry_with_backoff(lambda q=query: _flatten(self._api.filter_tasks(query=q)))
+            for task in tasks:
                 if SUFFIX_RE.search(task.content):
                     seen[task.id] = task
         return list(seen.values())
 
     def update_content(self, task_id: str, content: str) -> None:
-        self._api.update_task(task_id=task_id, content=content)
+        retry_with_backoff(lambda: self._api.update_task(task_id=task_id, content=content))
