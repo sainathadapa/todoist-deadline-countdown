@@ -4,25 +4,23 @@ import responses
 from countdown.todoist_client import TodoistClient
 
 
-SYNC_URL = "https://api.todoist.com/api/v1/sync"
+USER_URL = "https://api.todoist.com/api/v1/user"
 
 
 @responses.activate
 def test_fetch_user_timezone_returns_iana_name() -> None:
     responses.add(
-        method=responses.POST,
-        url=SYNC_URL,
+        method=responses.GET,
+        url=USER_URL,
         json={
-            "user": {
-                "id": "1",
-                "tz_info": {
-                    "timezone": "America/New_York",
-                    "gmt_string": "-04:00",
-                    "hours": -4,
-                    "minutes": 0,
-                    "is_dst": 1,
-                },
-            }
+            "id": "1",
+            "tz_info": {
+                "timezone": "America/New_York",
+                "gmt_string": "-04:00",
+                "hours": -4,
+                "minutes": 0,
+                "is_dst": 1,
+            },
         },
         status=200,
     )
@@ -34,9 +32,9 @@ def test_fetch_user_timezone_returns_iana_name() -> None:
 @responses.activate
 def test_fetch_user_timezone_returns_none_when_missing() -> None:
     responses.add(
-        method=responses.POST,
-        url=SYNC_URL,
-        json={"user": {"id": "1"}},
+        method=responses.GET,
+        url=USER_URL,
+        json={"id": "1"},
         status=200,
     )
 
@@ -47,9 +45,9 @@ def test_fetch_user_timezone_returns_none_when_missing() -> None:
 @responses.activate
 def test_fetch_user_timezone_sends_bearer_token() -> None:
     responses.add(
-        method=responses.POST,
-        url=SYNC_URL,
-        json={"user": {"tz_info": {"timezone": "UTC"}}},
+        method=responses.GET,
+        url=USER_URL,
+        json={"tz_info": {"timezone": "UTC"}},
         status=200,
     )
 
