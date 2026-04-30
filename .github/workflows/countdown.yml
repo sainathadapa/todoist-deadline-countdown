@@ -1,7 +1,7 @@
 name: countdown
 on:
   schedule:
-    - cron: '5 11 * * *'    # 11:05 UTC ≈ 07:05 America/New_York (EDT)
+    - cron: '5 */3 * * *'   # every 3 hours at :05 (off-the-hour for better scheduler reliability)
   workflow_dispatch: {}
 
 jobs:

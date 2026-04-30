@@ -6,19 +6,15 @@ import re
 def format_marker(delta_days: int) -> str:
     """Return the bracket-less countdown marker for a given delta in days.
 
-    Rules:
-      delta_days <  0      -> "T+{abs(delta)}d"  (overdue, count up in days)
-      0 <= delta_days <=14 -> "T-{delta}d"
-      15 <= delta_days <=89 -> "T-{round(delta/7)}w"
-      delta_days >= 90      -> "T-{round(delta/30)}m"
+    Rules (applied symmetrically to past and future):
+      |delta_days| <= 99  -> days  ("T-Nd" or "T+Nd")
+      |delta_days| >= 100 -> weeks ("T-Nw" or "T+Nw")
     """
-    if delta_days < 0:
-        return f"T+{-delta_days}d"
-    if delta_days <= 14:
-        return f"T-{delta_days}d"
-    if delta_days <= 89:
-        return f"T-{round(delta_days / 7)}w"
-    return f"T-{round(delta_days / 30)}m"
+    sign = "-" if delta_days >= 0 else "+"
+    magnitude = abs(delta_days)
+    if magnitude <= 99:
+        return f"T{sign}{magnitude}d"
+    return f"T{sign}{round(magnitude / 7)}w"
 
 
 PREFIX_RE = re.compile(r"^\s*\[T[+-]\d+[dwm]\]\s*")

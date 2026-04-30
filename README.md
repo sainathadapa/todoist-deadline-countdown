@@ -7,12 +7,11 @@ a countdown badge based on its deadline.
 
 | Time to deadline | Prefix |
 |---|---|
-| 10 days overdue | `[T+10d]` |
-| 1 day overdue | `[T+1d]` |
+| 100+ days overdue | `[T+Nw]` (e.g. `[T+14w]`) |
+| 1–99 days overdue | `[T+Nd]` (e.g. `[T+1d]`, `[T+10d]`) |
 | Today | `[T-0d]` |
-| 1–14 days | `[T-Nd]` (e.g. `[T-7d]`) |
-| 15–89 days | `[T-Nw]` (e.g. `[T-2w]`, `[T-13w]`) |
-| 90+ days | `[T-Nm]` (e.g. `[T-3m]`, `[T-12m]`) |
+| 1–99 days | `[T-Nd]` (e.g. `[T-7d]`, `[T-99d]`) |
+| 100+ days | `[T-Nw]` (e.g. `[T-14w]`, `[T-52w]`) |
 
 Runs once daily and is idempotent — re-running mid-day is a no-op.
 
