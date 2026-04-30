@@ -4,7 +4,7 @@ import responses
 from countdown.todoist_client import TodoistClient
 
 
-SYNC_URL = "https://api.todoist.com/sync/v9/sync"
+SYNC_URL = "https://api.todoist.com/api/v1/sync"
 
 
 @responses.activate
