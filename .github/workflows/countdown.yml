@@ -15,3 +15,4 @@ jobs:
       - run: uv run python -m countdown
         env:
           TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          COUNTDOWN_TZ: ${{ vars.COUNTDOWN_TZ }}
