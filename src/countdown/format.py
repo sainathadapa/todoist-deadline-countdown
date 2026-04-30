@@ -1,10 +1,10 @@
-"""Countdown suffix formatting and idempotent strip/apply helpers."""
+"""Countdown prefix formatting and idempotent strip/apply helpers."""
 
 import re
 
 
-def format_suffix(delta_days: int) -> str:
-    """Return the bracket-less countdown suffix for a given delta in days.
+def format_marker(delta_days: int) -> str:
+    """Return the bracket-less countdown marker for a given delta in days.
 
     Rules:
       delta_days <  0      -> "T+{abs(delta)}d"  (overdue, count up in days)
@@ -21,17 +21,19 @@ def format_suffix(delta_days: int) -> str:
     return f"T-{round(delta_days / 30)}m"
 
 
-SUFFIX_RE = re.compile(r"\s*\[T[+-]\d+[dwm]\]\s*$")
+PREFIX_RE = re.compile(r"^\s*\[T[+-]\d+[dwm]\]\s*")
+# Matches a marker anywhere a task might carry it (used for filtering search results).
+MARKER_RE = re.compile(r"\[T[+-]\d+[dwm]\]")
 
 
-def strip_suffix(content: str) -> str:
-    """Remove a trailing countdown suffix if present. Idempotent."""
-    return SUFFIX_RE.sub("", content).rstrip()
+def strip_marker(content: str) -> str:
+    """Remove a leading countdown marker if present. Idempotent."""
+    return PREFIX_RE.sub("", content).strip()
 
 
-def apply_suffix(content: str, suffix: str) -> str:
-    """Replace any existing countdown suffix with `[suffix]` at the end."""
-    base = strip_suffix(content)
+def apply_marker(content: str, marker: str) -> str:
+    """Replace any existing countdown marker with `[marker]` at the start."""
+    base = strip_marker(content)
     if not base:
-        return f"[{suffix}]"
-    return f"{base} [{suffix}]"
+        return f"[{marker}]"
+    return f"[{marker}] {base}"

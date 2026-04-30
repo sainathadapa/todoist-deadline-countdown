@@ -73,10 +73,10 @@ def test_list_deadlined_tasks_uses_filter_query(mock_api_cls: MagicMock) -> None
 
 
 @patch("countdown.todoist_client.TodoistAPI")
-def test_list_suffixed_tasks_dedupes_across_two_searches(mock_api_cls: MagicMock) -> None:
+def test_list_marked_tasks_dedupes_across_two_searches(mock_api_cls: MagicMock) -> None:
     api = mock_api_cls.return_value
-    task_a = MagicMock(id="A", content="Task with [T-2w]")
-    task_b = MagicMock(id="B", content="Task with [T+1d]")
+    task_a = MagicMock(id="A", content="[T-2w] Task with marker")
+    task_b = MagicMock(id="B", content="[T+1d] Task with marker")
     task_c = MagicMock(id="C", content="False positive containing T- in body")
 
     def filter_side_effect(query: str):
@@ -89,9 +89,9 @@ def test_list_suffixed_tasks_dedupes_across_two_searches(mock_api_cls: MagicMock
     api.filter_tasks.side_effect = filter_side_effect
 
     client = TodoistClient(token="t")
-    tasks = client.list_suffixed_tasks()
+    tasks = client.list_marked_tasks()
 
-    # task_c is filtered out because its content does not match SUFFIX_RE
+    # task_c is filtered out because its content does not match MARKER_RE
     ids = sorted(t.id for t in tasks)
     assert ids == ["A", "B"]
 
@@ -102,19 +102,19 @@ def test_update_content_calls_sdk_update_task(mock_api_cls: MagicMock) -> None:
     api.update_task.return_value = MagicMock()
 
     client = TodoistClient(token="t")
-    client.update_content(task_id="42", content="Hello [T-1d]")
+    client.update_content(task_id="42", content="[T-1d] Hello")
 
-    api.update_task.assert_called_once_with(task_id="42", content="Hello [T-1d]")
+    api.update_task.assert_called_once_with(task_id="42", content="[T-1d] Hello")
 
 
 @patch("countdown.todoist_client.TodoistAPI")
-def test_list_suffixed_tasks_dedupes_when_task_appears_in_both_searches(
+def test_list_marked_tasks_dedupes_when_task_appears_in_both_searches(
     mock_api_cls: MagicMock,
 ) -> None:
     api = mock_api_cls.return_value
     # The same task object is returned by BOTH searches — this can happen if a
-    # title contains both a `T-` substring elsewhere AND a final `[T+1d]` suffix.
-    same_task = MagicMock(id="DUPE", content="meeting [T+1d]")
+    # title contains both a `T-` substring elsewhere AND a leading `[T+1d]` marker.
+    same_task = MagicMock(id="DUPE", content="[T+1d] meeting")
 
     def filter_side_effect(query: str):
         if query == "search: T-":
@@ -126,7 +126,7 @@ def test_list_suffixed_tasks_dedupes_when_task_appears_in_both_searches(
     api.filter_tasks.side_effect = filter_side_effect
 
     client = TodoistClient(token="t")
-    tasks = client.list_suffixed_tasks()
+    tasks = client.list_marked_tasks()
 
     # Despite appearing in both searches, the task is returned exactly once.
     assert len(tasks) == 1

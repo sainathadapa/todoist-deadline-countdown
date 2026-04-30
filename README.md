@@ -1,11 +1,11 @@
 # todoist-deadline-countdown
 
-Daily GitHub Actions cron job that suffixes every uncompleted Todoist task with
+Daily GitHub Actions cron job that prefixes every uncompleted Todoist task with
 a countdown badge based on its deadline.
 
 ## What it does
 
-| Time to deadline | Suffix |
+| Time to deadline | Prefix |
 |---|---|
 | 10 days overdue | `[T+10d]` |
 | 1 day overdue | `[T+1d]` |
@@ -45,16 +45,16 @@ TODOIST_API_TOKEN=your-token uv run python -m countdown doctor
 
 ## Rollback
 
-To remove every countdown suffix from every task:
+To remove every countdown prefix from every task:
 ```bash
 TODOIST_API_TOKEN=your-token uv run python -m countdown --strip-all
 ```
 
 ## Idempotency
 
-The script identifies its own annotations using the regex `\s*\[T[+-]\d+[dwm]\]\s*$`
-anchored at end-of-string. Anything not matching that pattern — including user-typed
-text like `[draft]` or a literal `T-15d` mid-title — is left untouched.
+The script identifies its own annotations using the regex `^\s*\[T[+-]\d+[dwm]\]\s*`
+anchored at start-of-string. Anything not matching that pattern — including user-typed
+text like `[draft]` mid-title or a literal `T-15d` in the body — is left untouched.
 
 ## Caveats
 

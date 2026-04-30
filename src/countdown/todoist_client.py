@@ -9,7 +9,7 @@ from typing import Callable, TypeVar
 import requests
 from todoist_api_python.api import TodoistAPI
 
-from countdown.format import SUFFIX_RE
+from countdown.format import MARKER_RE
 
 USER_URL = "https://api.todoist.com/api/v1/user"
 
@@ -96,12 +96,12 @@ class TodoistClient:
             lambda: _flatten(self._api.filter_tasks(query="deadline before: 5 years from now"))
         )
 
-    def list_suffixed_tasks(self):
+    def list_marked_tasks(self):
         seen: dict[str, object] = {}
         for query in ("search: T-", "search: T+"):
             tasks = retry_with_backoff(lambda q=query: _flatten(self._api.filter_tasks(query=q)))
             for task in tasks:
-                if SUFFIX_RE.search(task.content):
+                if MARKER_RE.search(task.content):
                     seen[task.id] = task
         return list(seen.values())
 
