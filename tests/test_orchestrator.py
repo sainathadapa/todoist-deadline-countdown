@@ -17,17 +17,17 @@ def _task(task_id: str, content: str, deadline_iso: str | None):
     return MagicMock(id=task_id, content=content, deadline=deadline)
 
 
-def test_run_appends_suffix_to_deadlined_tasks() -> None:
+def test_run_prepends_marker_to_deadlined_tasks() -> None:
     today = date(2026, 4, 29)
     client = MagicMock()
     client.list_deadlined_tasks.return_value = [
         _task("1", "File 2026 taxes", "2026-05-14"),  # 15 days -> T-2w
     ]
-    client.list_suffixed_tasks.return_value = []
+    client.list_marked_tasks.return_value = []
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
 
-    client.update_content.assert_called_once_with(task_id="1", content="File 2026 taxes [T-2w]")
+    client.update_content.assert_called_once_with(task_id="1", content="[T-2w] File 2026 taxes")
     assert summary.scanned == 1
     assert summary.updated == 1
     assert summary.errors == 0
@@ -37,9 +37,9 @@ def test_run_is_idempotent_skips_unchanged_content() -> None:
     today = date(2026, 4, 29)
     client = MagicMock()
     client.list_deadlined_tasks.return_value = [
-        _task("1", "File 2026 taxes [T-2w]", "2026-05-14"),
+        _task("1", "[T-2w] File 2026 taxes", "2026-05-14"),
     ]
-    client.list_suffixed_tasks.return_value = client.list_deadlined_tasks.return_value
+    client.list_marked_tasks.return_value = client.list_deadlined_tasks.return_value
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
 
@@ -47,12 +47,12 @@ def test_run_is_idempotent_skips_unchanged_content() -> None:
     assert summary.updated == 0
 
 
-def test_run_strips_suffix_when_deadline_removed() -> None:
+def test_run_strips_marker_when_deadline_removed() -> None:
     today = date(2026, 4, 29)
-    no_deadline_task = _task("9", "Old task [T-3d]", deadline_iso=None)
+    no_deadline_task = _task("9", "[T-3d] Old task", deadline_iso=None)
     client = MagicMock()
     client.list_deadlined_tasks.return_value = []
-    client.list_suffixed_tasks.return_value = [no_deadline_task]
+    client.list_marked_tasks.return_value = [no_deadline_task]
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
 
@@ -66,7 +66,7 @@ def test_run_dry_run_does_not_write() -> None:
     client.list_deadlined_tasks.return_value = [
         _task("1", "File 2026 taxes", "2026-05-14"),
     ]
-    client.list_suffixed_tasks.return_value = []
+    client.list_marked_tasks.return_value = []
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=True)
 
@@ -81,7 +81,7 @@ def test_run_continues_on_single_task_error_and_reports_count() -> None:
         _task("1", "ok task", "2026-05-14"),
         _task("2", "bad task", "2026-05-14"),
     ]
-    client.list_suffixed_tasks.return_value = []
+    client.list_marked_tasks.return_value = []
 
     def update_side_effect(task_id: str, content: str) -> None:
         if task_id == "2":
@@ -100,7 +100,7 @@ def test_run_skips_task_with_empty_content() -> None:
     today = date(2026, 4, 29)
     client = MagicMock()
     client.list_deadlined_tasks.return_value = [_task("1", "", "2026-05-14")]
-    client.list_suffixed_tasks.return_value = []
+    client.list_marked_tasks.return_value = []
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
 
@@ -121,12 +121,12 @@ def test_run_handles_datetime_in_deadline_field() -> None:
     )
     client = MagicMock()
     client.list_deadlined_tasks.return_value = [task]
-    client.list_suffixed_tasks.return_value = []
+    client.list_marked_tasks.return_value = []
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
 
     client.update_content.assert_called_once_with(
-        task_id="dt", content="Renew passport [T-2w]"
+        task_id="dt", content="[T-2w] Renew passport"
     )
     assert summary.updated == 1
     assert summary.errors == 0
@@ -152,17 +152,17 @@ def test_main_doctor_subcommand_prints_user_and_returns_zero(
     assert "America/New_York" in out
 
 
-def test_main_strip_all_strips_suffix_from_every_marked_task(
+def test_main_strip_all_strips_marker_from_every_marked_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("TODOIST_API_TOKEN", "test-token")
 
-    suffixed = [
-        MagicMock(id="A", content="task one [T-2w]"),
-        MagicMock(id="B", content="task two [T+1d]"),
+    marked = [
+        MagicMock(id="A", content="[T-2w] task one"),
+        MagicMock(id="B", content="[T+1d] task two"),
     ]
     fake_client = MagicMock()
-    fake_client.list_suffixed_tasks.return_value = suffixed
+    fake_client.list_marked_tasks.return_value = marked
 
     with patch("countdown.__main__.TodoistClient", return_value=fake_client):
         from countdown.__main__ import main

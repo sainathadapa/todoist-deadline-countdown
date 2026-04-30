@@ -1,6 +1,6 @@
 import pytest
 
-from countdown.format import format_suffix
+from countdown.format import format_marker
 
 
 @pytest.mark.parametrize(
@@ -20,5 +20,5 @@ from countdown.format import format_suffix
         (365, "T-12m"),
     ],
 )
-def test_format_suffix_boundary_table(delta_days: int, expected: str) -> None:
-    assert format_suffix(delta_days) == expected
+def test_format_marker_boundary_table(delta_days: int, expected: str) -> None:
+    assert format_marker(delta_days) == expected

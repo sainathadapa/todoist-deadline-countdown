@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from countdown.format import apply_suffix, format_suffix, strip_suffix
+from countdown.format import apply_marker, format_marker, strip_marker
 from countdown.timezone import resolve_timezone
 from countdown.todoist_client import TodoistClient
 
@@ -56,19 +56,19 @@ def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
             continue
 
         delta = (deadline - today).days
-        suffix = format_suffix(delta)
-        new_content = apply_suffix(task.content, suffix)
+        marker = format_marker(delta)
+        new_content = apply_marker(task.content, marker)
 
         if new_content == task.content:
             log.info(
-                '[skip ] %s "%s" delta=%d suffix=%s (no change)',
-                task.id, task.content, delta, suffix,
+                '[skip ] %s "%s" delta=%d marker=%s (no change)',
+                task.id, task.content, delta, marker,
             )
             continue
 
         log.info(
-            '[write] %s "%s" delta=%d suffix=%s (was: "%s")',
-            task.id, new_content, delta, suffix, task.content,
+            '[write] %s "%s" delta=%d marker=%s (was: "%s")',
+            task.id, new_content, delta, marker, task.content,
         )
         if dry_run:
             summary.updated += 1
@@ -80,11 +80,11 @@ def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
             log.error("[error] %s %s", task.id, exc)
             summary.errors += 1
 
-    # Strip pass: tasks bearing our suffix that are no longer in the deadlined set.
-    for task in client.list_suffixed_tasks():
+    # Strip pass: tasks bearing our marker that are no longer in the deadlined set.
+    for task in client.list_marked_tasks():
         if task.id in deadlined_ids:
             continue
-        new_content = strip_suffix(task.content)
+        new_content = strip_marker(task.content)
         if new_content == task.content:
             continue
         log.info('[strip] %s "%s" deadline removed; stripping', task.id, task.content)
@@ -122,8 +122,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if argv and argv[0] == "--strip-all":
         errors = 0
-        for task in client.list_suffixed_tasks():
-            new_content = strip_suffix(task.content)
+        for task in client.list_marked_tasks():
+            new_content = strip_marker(task.content)
             if new_content == task.content:
                 continue
             try:
