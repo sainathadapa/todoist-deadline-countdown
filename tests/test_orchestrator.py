@@ -21,13 +21,13 @@ def test_run_prepends_marker_to_deadlined_tasks() -> None:
     today = date(2026, 4, 29)
     client = MagicMock()
     client.list_deadlined_tasks.return_value = [
-        _task("1", "File 2026 taxes", "2026-05-14"),  # 15 days -> T-2w
+        _task("1", "File 2026 taxes", "2026-05-14"),  # 15 days -> T-15d
     ]
     client.list_marked_tasks.return_value = []
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
 
-    client.update_content.assert_called_once_with(task_id="1", content="[T-2w] File 2026 taxes")
+    client.update_content.assert_called_once_with(task_id="1", content="[T-15d] File 2026 taxes")
     assert summary.scanned == 1
     assert summary.updated == 1
     assert summary.errors == 0
@@ -37,7 +37,7 @@ def test_run_is_idempotent_skips_unchanged_content() -> None:
     today = date(2026, 4, 29)
     client = MagicMock()
     client.list_deadlined_tasks.return_value = [
-        _task("1", "[T-2w] File 2026 taxes", "2026-05-14"),
+        _task("1", "[T-15d] File 2026 taxes", "2026-05-14"),
     ]
     client.list_marked_tasks.return_value = client.list_deadlined_tasks.return_value
 
@@ -126,7 +126,7 @@ def test_run_handles_datetime_in_deadline_field() -> None:
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
 
     client.update_content.assert_called_once_with(
-        task_id="dt", content="[T-2w] Renew passport"
+        task_id="dt", content="[T-15d] Renew passport"
     )
     assert summary.updated == 1
     assert summary.errors == 0
