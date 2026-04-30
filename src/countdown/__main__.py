@@ -106,6 +106,7 @@ def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(argv) if argv is not None else sys.argv[1:]
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     token = os.environ.get("TODOIST_API_TOKEN")
     if not token:
@@ -113,6 +114,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     client = TodoistClient(token=token)
+
+    if argv and argv[0] == "doctor":
+        tz = client.fetch_user_timezone() or "(none)"
+        print(f"Token OK. User timezone (per Todoist): {tz}")
+        return 0
+
     tz = resolve_timezone(client)
     today = datetime.now(tz).date()
     dry_run = os.environ.get("DRY_RUN") == "1"

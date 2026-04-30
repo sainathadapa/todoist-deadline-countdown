@@ -130,3 +130,23 @@ def test_run_handles_datetime_in_deadline_field() -> None:
     )
     assert summary.updated == 1
     assert summary.errors == 0
+
+
+from unittest.mock import patch
+
+
+def test_main_doctor_subcommand_prints_user_and_returns_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("TODOIST_API_TOKEN", "test-token")
+
+    fake_client = MagicMock()
+    fake_client.fetch_user_timezone.return_value = "America/New_York"
+
+    with patch("countdown.__main__.TodoistClient", return_value=fake_client):
+        from countdown.__main__ import main
+        rc = main(["doctor"])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "America/New_York" in out
