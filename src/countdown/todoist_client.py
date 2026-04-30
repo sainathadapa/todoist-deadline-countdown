@@ -11,7 +11,7 @@ from todoist_api_python.api import TodoistAPI
 
 from countdown.format import SUFFIX_RE
 
-SYNC_URL = "https://api.todoist.com/sync/v9/sync"
+SYNC_URL = "https://api.todoist.com/api/v1/sync"
 
 T = TypeVar("T")
 
