@@ -207,3 +207,28 @@ def test_retry_with_backoff_gives_up_after_max_attempts() -> None:
     with pytest.raises(requests.HTTPError):
         retry_with_backoff(fn, sleep=lambda _: None, max_attempts=3)
     assert len(attempts) == 3
+
+
+def test_retry_with_backoff_retries_on_transport_error() -> None:
+    attempts = []
+
+    def fn():
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise requests.ConnectionError("simulated DNS failure")
+        return "ok"
+
+    assert retry_with_backoff(fn, sleep=lambda _: None) == "ok"
+    assert len(attempts) == 3
+
+
+def test_retry_with_backoff_gives_up_on_persistent_transport_error() -> None:
+    attempts = []
+
+    def fn():
+        attempts.append(1)
+        raise requests.Timeout("simulated timeout")
+
+    with pytest.raises(requests.Timeout):
+        retry_with_backoff(fn, sleep=lambda _: None, max_attempts=3)
+    assert len(attempts) == 3
