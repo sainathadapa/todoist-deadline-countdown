@@ -2,7 +2,12 @@ name: countdown
 on:
   schedule:
     - cron: '5 */3 * * *'   # every 3 hours at :05 (off-the-hour for better scheduler reliability)
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview changes without writing to Todoist'
+        type: boolean
+        default: false
 
 jobs:
   run:
@@ -16,3 +21,4 @@ jobs:
         env:
           TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
           COUNTDOWN_TZ: ${{ vars.COUNTDOWN_TZ }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
