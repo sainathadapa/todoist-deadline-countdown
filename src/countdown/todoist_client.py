@@ -24,22 +24,27 @@ def retry_with_backoff(
     max_attempts: int = 3,
     sleep: Callable[[float], None] = time.sleep,
 ) -> T:
-    """Run `fn`, retrying on 5xx and 429. Re-raise on 4xx (except 429).
+    """Run `fn`, retrying on 5xx, 429, and transport-level errors.
 
+    Re-raises immediately on non-retryable HTTP statuses (4xx except 429).
     Backoff: 1s, 4s, 16s. For 429, prefer the `Retry-After` header.
     """
     last_exc: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
             return fn()
-        except requests.HTTPError as exc:
-            status = exc.response.status_code if exc.response is not None else None
-            if status not in RETRYABLE_STATUS:
-                raise
+        except requests.RequestException as exc:
+            if isinstance(exc, requests.HTTPError):
+                status = exc.response.status_code if exc.response is not None else None
+                if status not in RETRYABLE_STATUS:
+                    raise
+            # Otherwise: transport error — always retry up to max_attempts.
             last_exc = exc
             if attempt == max_attempts:
                 break
-            wait = _retry_after_seconds(exc) or (4 ** (attempt - 1))
+            wait = _retry_after_seconds(exc) if isinstance(exc, requests.HTTPError) else None
+            if wait is None:
+                wait = 4 ** (attempt - 1)
             sleep(wait)
     assert last_exc is not None
     raise last_exc
