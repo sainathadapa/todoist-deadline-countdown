@@ -1,4 +1,4 @@
-"""Thin wrapper over the Todoist SDK plus one direct Sync API call for user.tz_info."""
+"""Thin wrapper over the Todoist SDK plus one direct REST call for user.tz_info."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from todoist_api_python.api import TodoistAPI
 
 from countdown.format import SUFFIX_RE
 
-SYNC_URL = "https://api.todoist.com/api/v1/sync"
+USER_URL = "https://api.todoist.com/api/v1/user"
 
 T = TypeVar("T")
 
@@ -73,23 +73,22 @@ class TodoistClient:
         self._api = TodoistAPI(token)
 
     def fetch_user_timezone(self) -> str | None:
-        """Fetch the authenticated user's IANA timezone via the Sync API.
+        """Fetch the authenticated user's IANA timezone via GET /api/v1/user.
 
         Returns None if the response lacks tz_info.
         """
         def _do():
-            response = requests.post(
-                SYNC_URL,
+            response = requests.get(
+                USER_URL,
                 headers={"Authorization": f"Bearer {self._token}"},
-                data={"sync_token": "*", "resource_types": '["user"]'},
                 timeout=30,
             )
             response.raise_for_status()
             return response
 
         response = retry_with_backoff(_do)
-        user = response.json().get("user", {})
-        tz_info = user.get("tz_info") or {}
+        body = response.json()
+        tz_info = body.get("tz_info") or {}
         return tz_info.get("timezone")
 
     def list_deadlined_tasks(self):
