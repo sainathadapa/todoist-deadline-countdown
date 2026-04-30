@@ -133,3 +133,77 @@ def test_list_suffixed_tasks_dedupes_when_task_appears_in_both_searches(
     # Despite appearing in both searches, the task is returned exactly once.
     assert len(tasks) == 1
     assert tasks[0].id == "DUPE"
+
+
+import requests
+from countdown.todoist_client import retry_with_backoff
+
+
+def test_retry_with_backoff_returns_on_first_success() -> None:
+    calls = []
+
+    def fn():
+        calls.append(1)
+        return "ok"
+
+    assert retry_with_backoff(fn, sleep=lambda _: None) == "ok"
+    assert len(calls) == 1
+
+
+def test_retry_with_backoff_retries_on_5xx() -> None:
+    attempts = []
+
+    def fn():
+        attempts.append(1)
+        if len(attempts) < 3:
+            r = requests.Response()
+            r.status_code = 503
+            raise requests.HTTPError(response=r)
+        return "ok"
+
+    assert retry_with_backoff(fn, sleep=lambda _: None) == "ok"
+    assert len(attempts) == 3
+
+
+def test_retry_with_backoff_retries_on_429_then_succeeds() -> None:
+    attempts = []
+
+    def fn():
+        attempts.append(1)
+        if len(attempts) < 2:
+            r = requests.Response()
+            r.status_code = 429
+            r.headers["Retry-After"] = "1"
+            raise requests.HTTPError(response=r)
+        return "ok"
+
+    assert retry_with_backoff(fn, sleep=lambda _: None) == "ok"
+    assert len(attempts) == 2
+
+
+def test_retry_with_backoff_does_not_retry_on_401() -> None:
+    attempts = []
+
+    def fn():
+        attempts.append(1)
+        r = requests.Response()
+        r.status_code = 401
+        raise requests.HTTPError(response=r)
+
+    with pytest.raises(requests.HTTPError):
+        retry_with_backoff(fn, sleep=lambda _: None)
+    assert len(attempts) == 1
+
+
+def test_retry_with_backoff_gives_up_after_max_attempts() -> None:
+    attempts = []
+
+    def fn():
+        attempts.append(1)
+        r = requests.Response()
+        r.status_code = 503
+        raise requests.HTTPError(response=r)
+
+    with pytest.raises(requests.HTTPError):
+        retry_with_backoff(fn, sleep=lambda _: None, max_attempts=3)
+    assert len(attempts) == 3
