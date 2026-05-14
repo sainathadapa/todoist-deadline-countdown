@@ -73,6 +73,18 @@ def test_list_deadlined_tasks_uses_filter_query(mock_api_cls: MagicMock) -> None
 
 
 @patch("countdown.todoist_client.TodoistAPI")
+def test_list_active_tasks_uses_get_tasks(mock_api_cls: MagicMock) -> None:
+    api = mock_api_cls.return_value
+    api.get_tasks.return_value = iter([[MagicMock(id="1"), MagicMock(id="2")]])
+
+    client = TodoistClient(token="t")
+    tasks = client.list_active_tasks()
+
+    api.get_tasks.assert_called_once_with()
+    assert [t.id for t in tasks] == ["1", "2"]
+
+
+@patch("countdown.todoist_client.TodoistAPI")
 def test_list_marked_tasks_dedupes_across_two_searches(mock_api_cls: MagicMock) -> None:
     api = mock_api_cls.return_value
     task_a = MagicMock(id="A", content="[T-2w] Task with marker")

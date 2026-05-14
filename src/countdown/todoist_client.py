@@ -96,6 +96,9 @@ class TodoistClient:
             lambda: _flatten(self._api.filter_tasks(query="deadline before: 5 years from now"))
         )
 
+    def list_active_tasks(self):
+        return retry_with_backoff(lambda: _flatten(self._api.get_tasks()))
+
     def list_marked_tasks(self):
         seen: dict[str, object] = {}
         for query in ("search: T-", "search: T+"):
