@@ -10,6 +10,7 @@ GitHub account on the free Actions tier.
 | Renew passport | `[T-2w] Renew passport` |
 | Pay rent | `[T-0d] Pay rent` |
 | Submit assignment | `[T+3d] Submit assignment` |
+| Plan launch *(with subtasks)* | `[T-15d] Plan launch [7/13]` |
 
 ## Setup (5 minutes)
 
@@ -45,6 +46,8 @@ From here on it runs automatically every 3 hours.
 
 - Open Todoist — every task with a deadline now starts with `[T-Nd]`,
   `[T-Nw]`, `[T+Nd]`, or `[T+Nw]`.
+- Parent tasks that currently have subtasks also end with progress like
+  `[7/13]` (7 completed out of 13 total subtasks).
 - The **Actions** tab shows a green check after each scheduled run, plus
   a step summary with how many tasks were scanned and updated.
 
@@ -57,6 +60,9 @@ From here on it runs automatically every 3 hours.
 | 100+ days away | `[T-Nw]` (e.g. `[T-14w]`, `[T-52w]`) |
 | 1–99 days overdue | `[T+Nd]` (e.g. `[T+1d]`, `[T+10d]`) |
 | 100+ days overdue | `[T+Nw]` (e.g. `[T+14w]`) |
+
+For parent tasks with subtasks, a trailing progress suffix is also
+added: `[done/total]` (for example `[7/13]`).
 
 ## FAQ
 

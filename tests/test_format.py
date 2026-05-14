@@ -1,6 +1,6 @@
 import pytest
 
-from countdown.format import format_marker
+from countdown.format import apply_progress_suffix, format_marker, strip_progress_suffix
 
 
 @pytest.mark.parametrize(
@@ -23,3 +23,15 @@ from countdown.format import format_marker
 )
 def test_format_marker_boundary_table(delta_days: int, expected: str) -> None:
     assert format_marker(delta_days) == expected
+
+
+def test_apply_progress_suffix_adds_and_replaces_managed_suffix() -> None:
+    assert (
+        apply_progress_suffix("[T-15d] Parent [1/3]", completed=2, total=3)
+        == "[T-15d] Parent [2/3]"
+    )
+
+
+def test_apply_progress_suffix_removes_suffix_when_no_subtasks() -> None:
+    assert apply_progress_suffix("[T-15d] Parent [1/3]", completed=0, total=0) == "[T-15d] Parent"
+    assert strip_progress_suffix("[T-15d] Parent [1/3]") == "[T-15d] Parent"

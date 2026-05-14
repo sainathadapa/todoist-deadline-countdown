@@ -7,14 +7,27 @@ import pytest
 from countdown.__main__ import run
 
 
-def _task(task_id: str, content: str, deadline_iso: str | None):
+def _task(
+    task_id: str,
+    content: str,
+    deadline_iso: str | None,
+    *,
+    parent_id: str | None = None,
+    is_completed: bool = False,
+):
     """Build a fake Task object the orchestrator can consume."""
     deadline = MagicMock()
     if deadline_iso is None:
         deadline = None
     else:
         deadline.date = deadline_iso
-    return MagicMock(id=task_id, content=content, deadline=deadline)
+    return MagicMock(
+        id=task_id,
+        content=content,
+        deadline=deadline,
+        parent_id=parent_id,
+        is_completed=is_completed,
+    )
 
 
 def test_run_prepends_marker_to_deadlined_tasks() -> None:
@@ -23,6 +36,7 @@ def test_run_prepends_marker_to_deadlined_tasks() -> None:
     client.list_deadlined_tasks.return_value = [
         _task("1", "File 2026 taxes", "2026-05-14"),  # 15 days -> T-15d
     ]
+    client.list_active_tasks.return_value = []
     client.list_marked_tasks.return_value = []
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
@@ -39,6 +53,7 @@ def test_run_is_idempotent_skips_unchanged_content() -> None:
     client.list_deadlined_tasks.return_value = [
         _task("1", "[T-15d] File 2026 taxes", "2026-05-14"),
     ]
+    client.list_active_tasks.return_value = []
     client.list_marked_tasks.return_value = client.list_deadlined_tasks.return_value
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
@@ -52,6 +67,7 @@ def test_run_strips_marker_when_deadline_removed() -> None:
     no_deadline_task = _task("9", "[T-3d] Old task", deadline_iso=None)
     client = MagicMock()
     client.list_deadlined_tasks.return_value = []
+    client.list_active_tasks.return_value = []
     client.list_marked_tasks.return_value = [no_deadline_task]
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
@@ -60,12 +76,25 @@ def test_run_strips_marker_when_deadline_removed() -> None:
     assert summary.stripped == 1
 
 
+def test_run_with_no_deadlined_tasks_does_not_fetch_active_tasks() -> None:
+    today = date(2026, 4, 29)
+    client = MagicMock()
+    client.list_deadlined_tasks.return_value = []
+    client.list_marked_tasks.return_value = []
+
+    summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
+
+    client.list_active_tasks.assert_not_called()
+    assert summary.scanned == 0
+
+
 def test_run_dry_run_does_not_write() -> None:
     today = date(2026, 4, 29)
     client = MagicMock()
     client.list_deadlined_tasks.return_value = [
         _task("1", "File 2026 taxes", "2026-05-14"),
     ]
+    client.list_active_tasks.return_value = []
     client.list_marked_tasks.return_value = []
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=True)
@@ -81,6 +110,7 @@ def test_run_continues_on_single_task_error_and_reports_count() -> None:
         _task("1", "ok task", "2026-05-14"),
         _task("2", "bad task", "2026-05-14"),
     ]
+    client.list_active_tasks.return_value = []
     client.list_marked_tasks.return_value = []
 
     def update_side_effect(task_id: str, content: str) -> None:
@@ -100,6 +130,7 @@ def test_run_skips_task_with_empty_content() -> None:
     today = date(2026, 4, 29)
     client = MagicMock()
     client.list_deadlined_tasks.return_value = [_task("1", "", "2026-05-14")]
+    client.list_active_tasks.return_value = []
     client.list_marked_tasks.return_value = []
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
@@ -121,6 +152,7 @@ def test_run_handles_datetime_in_deadline_field() -> None:
     )
     client = MagicMock()
     client.list_deadlined_tasks.return_value = [task]
+    client.list_active_tasks.return_value = []
     client.list_marked_tasks.return_value = []
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
@@ -128,6 +160,68 @@ def test_run_handles_datetime_in_deadline_field() -> None:
     client.update_content.assert_called_once_with(
         task_id="dt", content="[T-15d] Renew passport"
     )
+    assert summary.updated == 1
+    assert summary.errors == 0
+
+
+def test_run_adds_progress_suffix_for_parent_task() -> None:
+    today = date(2026, 4, 29)
+    client = MagicMock()
+    parent = _task("parent", "Project launch", "2026-05-14")
+    sub_done = _task("s1", "Done child", None, parent_id="parent", is_completed=True)
+    sub_todo = _task("s2", "Todo child", None, parent_id="parent", is_completed=False)
+    client.list_deadlined_tasks.return_value = [parent]
+    client.list_active_tasks.return_value = [parent, sub_done, sub_todo]
+    client.list_marked_tasks.return_value = [parent]
+
+    summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
+
+    client.update_content.assert_called_once_with(
+        task_id="parent", content="[T-15d] Project launch [1/2]"
+    )
+    assert summary.updated == 1
+
+
+def test_run_with_no_subtasks_keeps_user_authored_trailing_ratio() -> None:
+    today = date(2026, 4, 29)
+    client = MagicMock()
+    parent = _task("parent", "[T-15d] Project launch [7/13]", "2026-05-14")
+    client.list_deadlined_tasks.return_value = [parent]
+    client.list_active_tasks.return_value = [parent]
+    client.list_marked_tasks.return_value = [parent]
+
+    summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
+
+    client.update_content.assert_not_called()
+    assert summary.updated == 0
+
+
+def test_run_is_idempotent_when_marker_and_progress_are_already_correct() -> None:
+    today = date(2026, 4, 29)
+    client = MagicMock()
+    parent = _task("parent", "[T-15d] Project launch [1/2]", "2026-05-14")
+    sub_done = _task("s1", "Done child", None, parent_id="parent", is_completed=True)
+    sub_todo = _task("s2", "Todo child", None, parent_id="parent", is_completed=False)
+    client.list_deadlined_tasks.return_value = [parent]
+    client.list_active_tasks.return_value = [parent, sub_done, sub_todo]
+    client.list_marked_tasks.return_value = [parent]
+
+    summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
+
+    client.update_content.assert_not_called()
+    assert summary.updated == 0
+
+
+def test_run_continues_when_active_task_fetch_fails() -> None:
+    today = date(2026, 4, 29)
+    client = MagicMock()
+    client.list_deadlined_tasks.return_value = [_task("1", "File 2026 taxes", "2026-05-14")]
+    client.list_active_tasks.side_effect = RuntimeError("simulated active task failure")
+    client.list_marked_tasks.return_value = []
+
+    summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
+
+    client.update_content.assert_called_once_with(task_id="1", content="[T-15d] File 2026 taxes")
     assert summary.updated == 1
     assert summary.errors == 0
 
