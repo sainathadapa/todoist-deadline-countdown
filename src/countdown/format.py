@@ -20,6 +20,7 @@ def format_marker(delta_days: int) -> str:
 PREFIX_RE = re.compile(r"^\s*\[T[+-]\d+[dwm]\]\s*")
 # Matches a marker anywhere a task might carry it (used for filtering search results).
 MARKER_RE = re.compile(r"\[T[+-]\d+[dwm]\]")
+PROGRESS_SUFFIX_RE = re.compile(r"\s*\[\d+/\d+\]\s*$")
 
 
 def strip_marker(content: str) -> str:
@@ -33,3 +34,18 @@ def apply_marker(content: str, marker: str) -> str:
     if not base:
         return f"[{marker}]"
     return f"[{marker}] {base}"
+
+
+def strip_progress_suffix(content: str) -> str:
+    """Remove a trailing `[done/total]` progress suffix if present. Idempotent."""
+    return PROGRESS_SUFFIX_RE.sub("", content).strip()
+
+
+def apply_progress_suffix(content: str, *, completed: int, total: int) -> str:
+    """Apply a trailing subtask progress suffix for parent tasks."""
+    base = strip_progress_suffix(content)
+    if total <= 0:
+        return base
+    if not base:
+        return f"[{completed}/{total}]"
+    return f"{base} [{completed}/{total}]"

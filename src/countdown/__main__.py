@@ -9,7 +9,12 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from countdown.format import apply_marker, format_marker, strip_marker
+from countdown.format import (
+    apply_marker,
+    apply_progress_suffix,
+    format_marker,
+    strip_marker,
+)
 from countdown.timezone import resolve_timezone
 from countdown.todoist_client import TodoistClient
 
@@ -40,10 +45,40 @@ def _parse_deadline(task) -> date | None:
         return None
 
 
+def _build_subtask_progress(tasks) -> dict[str, tuple[int, int]]:
+    """Map parent task id -> (completed_subtasks, total_subtasks).
+
+    Assumption: for active parent tasks, Todoist active-task payloads include
+    subtasks with `is_completed` populated, so we count progress from that dataset.
+    """
+    progress: dict[str, list[int]] = {}
+    for task in tasks:
+        parent_id = getattr(task, "parent_id", None)
+        if parent_id is None:
+            continue
+        key = str(parent_id)
+        bucket = progress.setdefault(key, [0, 0])
+        bucket[1] += 1
+        if getattr(task, "is_completed", False):
+            bucket[0] += 1
+    return {parent_id: (done, total) for parent_id, (done, total) in progress.items()}
+
+
 def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
     summary = Summary()
     deadlined = client.list_deadlined_tasks()
     summary.scanned = len(deadlined)
+    progress_by_parent: dict[str, tuple[int, int]] = {}
+    if deadlined:
+        try:
+            active_tasks = client.list_active_tasks()
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "Could not fetch active tasks for subtask progress; continuing without suffixes: %s",
+                exc,
+            )
+        else:
+            progress_by_parent = _build_subtask_progress(active_tasks)
     deadlined_ids = {t.id for t in deadlined}
 
     for task in deadlined:
@@ -58,6 +93,12 @@ def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
         delta = (deadline - today).days
         marker = format_marker(delta)
         new_content = apply_marker(task.content, marker)
+        progress = progress_by_parent.get(str(task.id))
+        if progress is not None:
+            completed, total = progress
+            new_content = apply_progress_suffix(
+                new_content, completed=completed, total=total
+            )
 
         if new_content == task.content:
             log.info(
