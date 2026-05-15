@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime
 from itertools import chain
 from typing import Callable, TypeVar
 
@@ -12,6 +13,9 @@ from todoist_api_python.api import TodoistAPI
 from countdown.format import MARKER_RE
 
 USER_URL = "https://api.todoist.com/api/v1/user"
+COMPLETED_BY_COMPLETION_DATE_URL = (
+    "https://api.todoist.com/api/v1/tasks/completed/by_completion_date"
+)
 
 T = TypeVar("T")
 
@@ -98,6 +102,48 @@ class TodoistClient:
 
     def list_active_tasks(self):
         return retry_with_backoff(lambda: _flatten(self._api.get_tasks()))
+
+    def list_completed_subtasks_for_parent(
+        self, *, parent_id: str, since: datetime, until: datetime
+    ) -> list[dict]:
+        """Fetch completed subtasks for a parent in a completion-date window.
+
+        Uses direct REST because current SDK typing for this endpoint does not
+        expose `parent_id`, while the API supports it.
+        """
+        items: list[dict] = []
+        cursor: str | None = None
+
+        while True:
+            params = {
+                "since": since.isoformat().replace("+00:00", "Z"),
+                "until": until.isoformat().replace("+00:00", "Z"),
+                "parent_id": parent_id,
+                "limit": 200,
+            }
+            if cursor is not None:
+                params["cursor"] = cursor
+
+            def _do():
+                response = requests.get(
+                    COMPLETED_BY_COMPLETION_DATE_URL,
+                    headers={"Authorization": f"Bearer {self._token}"},
+                    params=params,
+                    timeout=30,
+                )
+                response.raise_for_status()
+                return response
+
+            response = retry_with_backoff(_do)
+            body = response.json()
+            page_items = body.get("items") or []
+            items.extend(page_items)
+
+            cursor = body.get("next_cursor")
+            if not cursor:
+                break
+
+        return items
 
     def list_marked_tasks(self):
         seen: dict[str, object] = {}

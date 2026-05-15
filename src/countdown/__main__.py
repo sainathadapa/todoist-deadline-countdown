@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from countdown.format import (
@@ -19,6 +19,7 @@ from countdown.timezone import resolve_timezone
 from countdown.todoist_client import TodoistClient
 
 log = logging.getLogger("countdown")
+COMPLETED_LOOKBACK_WINDOW_DAYS = 89
 
 
 @dataclass
@@ -45,23 +46,50 @@ def _parse_deadline(task) -> date | None:
         return None
 
 
-def _build_subtask_progress(tasks) -> dict[str, tuple[int, int]]:
-    """Map parent task id -> (completed_subtasks, total_subtasks).
-
-    Assumption: for active parent tasks, Todoist active-task payloads include
-    subtasks with `is_completed` populated, so we count progress from that dataset.
-    """
-    progress: dict[str, list[int]] = {}
+def _build_open_subtask_counts(tasks) -> dict[str, int]:
+    """Map parent task id -> number of open subtasks."""
+    progress: dict[str, int] = {}
     for task in tasks:
         parent_id = getattr(task, "parent_id", None)
         if parent_id is None:
             continue
         key = str(parent_id)
-        bucket = progress.setdefault(key, [0, 0])
-        bucket[1] += 1
-        if getattr(task, "is_completed", False):
-            bucket[0] += 1
-    return {parent_id: (done, total) for parent_id, (done, total) in progress.items()}
+        progress[key] = progress.get(key, 0) + 1
+    return progress
+
+
+def _to_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _completed_subtask_counts_for_parents(client, parent_tasks) -> dict[str, int]:
+    """Map parent task id -> completed subtask count from completion history."""
+    counts: dict[str, int] = {}
+    now_utc = datetime.now(timezone.utc)
+    window = timedelta(days=COMPLETED_LOOKBACK_WINDOW_DAYS)
+
+    for parent in parent_tasks:
+        parent_id = str(parent.id)
+        created_at = getattr(parent, "created_at", None)
+        if isinstance(created_at, datetime):
+            cursor = _to_utc(created_at)
+        else:
+            cursor = now_utc - window
+
+        total = 0
+        while cursor < now_utc:
+            until = min(cursor + window, now_utc)
+            items = client.list_completed_subtasks_for_parent(
+                parent_id=parent_id, since=cursor, until=until
+            )
+            total += len(items)
+            cursor = until
+        if total > 0:
+            counts[parent_id] = total
+
+    return counts
 
 
 def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
@@ -78,7 +106,31 @@ def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
                 exc,
             )
         else:
-            progress_by_parent = _build_subtask_progress(active_tasks)
+            open_counts = _build_open_subtask_counts(active_tasks)
+            parent_tasks_with_open_subtasks = [
+                task for task in deadlined if open_counts.get(str(task.id), 0) > 0
+            ]
+            completed_counts: dict[str, int] = {}
+            if parent_tasks_with_open_subtasks:
+                try:
+                    completed_counts = _completed_subtask_counts_for_parents(
+                        client, parent_tasks_with_open_subtasks
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.warning(
+                        "Could not fetch completed subtasks for progress suffixes; "
+                        "falling back to open-subtask counts only: %s",
+                        exc,
+                    )
+
+            for parent in parent_tasks_with_open_subtasks:
+                parent_id = str(parent.id)
+                open_subtasks = open_counts.get(parent_id, 0)
+                completed_subtasks = completed_counts.get(parent_id, 0)
+                progress_by_parent[parent_id] = (
+                    completed_subtasks,
+                    completed_subtasks + open_subtasks,
+                )
     deadlined_ids = {t.id for t in deadlined}
 
     for task in deadlined:
