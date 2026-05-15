@@ -5,6 +5,7 @@ from countdown.todoist_client import TodoistClient
 
 
 USER_URL = "https://api.todoist.com/api/v1/user"
+COMPLETED_URL = "https://api.todoist.com/api/v1/tasks/completed/by_completion_date"
 
 
 @responses.activate
@@ -55,6 +56,58 @@ def test_fetch_user_timezone_sends_bearer_token() -> None:
     client.fetch_user_timezone()
 
     assert responses.calls[0].request.headers["Authorization"] == "Bearer abc123"
+
+
+@responses.activate
+def test_list_completed_subtasks_for_parent_filters_and_paginates() -> None:
+    from datetime import datetime, timezone
+
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json={
+            "items": [{"id": "c1"}, {"id": "c2"}],
+            "next_cursor": "next-page",
+        },
+        status=200,
+        match=[responses.matchers.query_param_matcher(
+            {
+                "since": "2026-05-01T00:00:00Z",
+                "until": "2026-05-15T00:00:00Z",
+                "parent_id": "parent-1",
+                "limit": "200",
+            }
+        )],
+    )
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json={
+            "items": [{"id": "c3"}],
+            "next_cursor": None,
+        },
+        status=200,
+        match=[responses.matchers.query_param_matcher(
+            {
+                "since": "2026-05-01T00:00:00Z",
+                "until": "2026-05-15T00:00:00Z",
+                "parent_id": "parent-1",
+                "limit": "200",
+                "cursor": "next-page",
+            }
+        )],
+    )
+
+    client = TodoistClient(token="test-token")
+    items = client.list_completed_subtasks_for_parent(
+        parent_id="parent-1",
+        since=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        until=datetime(2026, 5, 15, tzinfo=timezone.utc),
+    )
+
+    assert [item["id"] for item in items] == ["c1", "c2", "c3"]
+    assert len(responses.calls) == 2
+    assert responses.calls[0].request.headers["Authorization"] == "Bearer test-token"
 
 
 from unittest.mock import MagicMock, patch

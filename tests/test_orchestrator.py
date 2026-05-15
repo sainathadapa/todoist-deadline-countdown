@@ -14,6 +14,7 @@ def _task(
     *,
     parent_id: str | None = None,
     is_completed: bool = False,
+    created_at=None,
 ):
     """Build a fake Task object the orchestrator can consume."""
     deadline = MagicMock()
@@ -27,6 +28,7 @@ def _task(
         deadline=deadline,
         parent_id=parent_id,
         is_completed=is_completed,
+        created_at=created_at,
     )
 
 
@@ -168,16 +170,17 @@ def test_run_adds_progress_suffix_for_parent_task() -> None:
     today = date(2026, 4, 29)
     client = MagicMock()
     parent = _task("parent", "Project launch", "2026-05-14")
-    sub_done = _task("s1", "Done child", None, parent_id="parent", is_completed=True)
-    sub_todo = _task("s2", "Todo child", None, parent_id="parent", is_completed=False)
+    sub_todo_1 = _task("s1", "Todo child 1", None, parent_id="parent", is_completed=False)
+    sub_todo_2 = _task("s2", "Todo child 2", None, parent_id="parent", is_completed=False)
     client.list_deadlined_tasks.return_value = [parent]
-    client.list_active_tasks.return_value = [parent, sub_done, sub_todo]
+    client.list_active_tasks.return_value = [parent, sub_todo_1, sub_todo_2]
+    client.list_completed_subtasks_for_parent.return_value = [{"id": "done-1"}]
     client.list_marked_tasks.return_value = [parent]
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
 
     client.update_content.assert_called_once_with(
-        task_id="parent", content="[T-15d] Project launch [1/2]"
+        task_id="parent", content="[T-15d] Project launch [1/3]"
     )
     assert summary.updated == 1
 
@@ -200,10 +203,10 @@ def test_run_is_idempotent_when_marker_and_progress_are_already_correct() -> Non
     today = date(2026, 4, 29)
     client = MagicMock()
     parent = _task("parent", "[T-15d] Project launch [1/2]", "2026-05-14")
-    sub_done = _task("s1", "Done child", None, parent_id="parent", is_completed=True)
     sub_todo = _task("s2", "Todo child", None, parent_id="parent", is_completed=False)
     client.list_deadlined_tasks.return_value = [parent]
-    client.list_active_tasks.return_value = [parent, sub_done, sub_todo]
+    client.list_active_tasks.return_value = [parent, sub_todo]
+    client.list_completed_subtasks_for_parent.return_value = [{"id": "done-1"}]
     client.list_marked_tasks.return_value = [parent]
 
     summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
