@@ -215,6 +215,32 @@ def test_run_is_idempotent_when_marker_and_progress_are_already_correct() -> Non
     assert summary.updated == 0
 
 
+def test_run_updates_existing_progress_suffix_when_only_completed_subtasks_remain() -> None:
+    today = date(2026, 4, 29)
+    client = MagicMock()
+    parent = _task("parent", "[T-15d] Project launch [7/8]", "2026-05-14")
+    client.list_deadlined_tasks.return_value = [parent]
+    client.list_active_tasks.return_value = [parent]
+    client.list_completed_subtasks_for_parent.return_value = [
+        {"id": "done-1"},
+        {"id": "done-2"},
+        {"id": "done-3"},
+        {"id": "done-4"},
+        {"id": "done-5"},
+        {"id": "done-6"},
+        {"id": "done-7"},
+        {"id": "done-8"},
+    ]
+    client.list_marked_tasks.return_value = [parent]
+
+    summary = run(client=client, today=today, tz=ZoneInfo("America/New_York"), dry_run=False)
+
+    client.update_content.assert_called_once_with(
+        task_id="parent", content="[T-15d] Project launch [8/8]"
+    )
+    assert summary.updated == 1
+
+
 def test_run_continues_when_active_task_fetch_fails() -> None:
     today = date(2026, 4, 29)
     client = MagicMock()

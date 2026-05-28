@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from countdown.format import (
+    PROGRESS_SUFFIX_RE,
     apply_marker,
     apply_progress_suffix,
     format_marker,
@@ -107,14 +108,15 @@ def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
             )
         else:
             open_counts = _build_open_subtask_counts(active_tasks)
-            parent_tasks_with_open_subtasks = [
+            parent_tasks_requiring_progress_sync = [
                 task for task in deadlined if open_counts.get(str(task.id), 0) > 0
+                or PROGRESS_SUFFIX_RE.search(task.content)
             ]
             completed_counts: dict[str, int] = {}
-            if parent_tasks_with_open_subtasks:
+            if parent_tasks_requiring_progress_sync:
                 try:
                     completed_counts = _completed_subtask_counts_for_parents(
-                        client, parent_tasks_with_open_subtasks
+                        client, parent_tasks_requiring_progress_sync
                     )
                 except Exception as exc:  # noqa: BLE001
                     log.warning(
@@ -123,10 +125,12 @@ def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
                         exc,
                     )
 
-            for parent in parent_tasks_with_open_subtasks:
+            for parent in parent_tasks_requiring_progress_sync:
                 parent_id = str(parent.id)
                 open_subtasks = open_counts.get(parent_id, 0)
                 completed_subtasks = completed_counts.get(parent_id, 0)
+                if open_subtasks <= 0 and completed_subtasks <= 0:
+                    continue
                 progress_by_parent[parent_id] = (
                     completed_subtasks,
                     completed_subtasks + open_subtasks,
