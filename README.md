@@ -78,6 +78,11 @@ touched.
 They make their own copy of the template with their own token. Each
 copy is fully independent — own repo, own schedule, own time zone.
 
+### Will my copy get updates from this repo automatically?
+No. Repositories created from this template are independent copies, not
+live mirrors. If this repo gets bug fixes or new features later, you'll
+need to apply those changes to your own repo manually.
+
 ### How do I change how often it runs?
 Edit `.github/workflows/countdown.yml`. The default is `'5 */3 * * *'`
 (every 3 hours at :05 past the hour). The minimum allowed by GitHub is
@@ -105,6 +110,22 @@ Then either disable the workflow (Actions tab → countdown → "⋯" →
 Disable workflow) or delete the repo. Note: badges that exist on tasks
 when the workflow stops running will remain until you run `--strip-all`
 or edit the tasks manually.
+
+## Upgrading your copy
+
+Template-created repositories do not receive updates from this repo
+automatically.
+
+If you want an update from this repo later, you have two options:
+
+- Simple: open the changed files here and copy the updates into your own
+  repo.
+- Advanced: add this repo as an `upstream` remote, fetch changes, and
+  cherry-pick specific commits you want.
+
+Note: repositories created from a GitHub template have unrelated
+history to the template repo, so a normal upstream merge or pull is
+usually not the cleanest upgrade path.
 
 ## Idempotency
 
