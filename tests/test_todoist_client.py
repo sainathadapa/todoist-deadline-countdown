@@ -121,7 +121,7 @@ def test_list_deadlined_tasks_uses_filter_query(mock_api_cls: MagicMock) -> None
     client = TodoistClient(token="t")
     tasks = client.list_deadlined_tasks()
 
-    api.filter_tasks.assert_called_once_with(query="deadline before: 5 years from now")
+    api.filter_tasks.assert_called_once_with(query="!no deadline")
     assert [t.id for t in tasks] == ["1", "2"]
 
 
