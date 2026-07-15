@@ -1,11 +1,6 @@
 import pytest
 
-from countdown.format import (
-    apply_progress_suffix,
-    format_marker,
-    format_recurrence_marker,
-    strip_progress_suffix,
-)
+from countdown.format import apply_progress_suffix, format_marker, strip_progress_suffix
 
 
 @pytest.mark.parametrize(
@@ -28,21 +23,6 @@ from countdown.format import (
 )
 def test_format_marker_boundary_table(delta_days: int, expected: str) -> None:
     assert format_marker(delta_days) == expected
-
-
-@pytest.mark.parametrize(
-    ("elapsed_days", "expected"),
-    [
-        (0, "R+0d"),
-        (1, "R+1d"),
-        (42, "R+42d"),
-        (99, "R+99d"),
-        (100, "R+14w"),
-        (365, "R+52w"),
-    ],
-)
-def test_format_recurrence_marker(elapsed_days, expected):
-    assert format_recurrence_marker(elapsed_days) == expected
 
 
 def test_apply_progress_suffix_adds_and_replaces_managed_suffix() -> None:

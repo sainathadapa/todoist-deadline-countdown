@@ -17,21 +17,9 @@ def format_marker(delta_days: int) -> str:
     return f"T{sign}{round(magnitude / 7)}w"
 
 
-def format_recurrence_marker(elapsed_days: int) -> str:
-    """Return the bracket-less count-up marker for elapsed calendar days."""
-    magnitude = max(0, elapsed_days)
-    if magnitude <= 99:
-        return f"R+{magnitude}d"
-    return f"R+{round(magnitude / 7)}w"
-
-
-DEADLINE_PREFIX_RE = re.compile(r"^\s*\[T[+-]\d+[dwm]\]\s*")
-RECURRENCE_PREFIX_RE = re.compile(r"^\s*\[R\+\d+[dw]\]\s*")
-PREFIX_RE = re.compile(
-    r"^(?:\s*\[(?:T[+-]\d+[dwm]|R\+\d+[dw])\]\s*)+"
-)
+PREFIX_RE = re.compile(r"^\s*\[T[+-]\d+[dwm]\]\s*")
 # Matches a marker anywhere a task might carry it (used for filtering search results).
-MARKER_RE = re.compile(r"\[(?:T[+-]\d+[dwm]|R\+\d+[dw])\]")
+MARKER_RE = re.compile(r"\[T[+-]\d+[dwm]\]")
 PROGRESS_SUFFIX_RE = re.compile(r"\s*\[\d+/\d+\]\s*$")
 
 

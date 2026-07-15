@@ -30,35 +30,10 @@ def test_apply_marker_replaces_existing_marker() -> None:
     assert apply_marker("[T-15d] File 2026 taxes", "T-2w") == "[T-2w] File 2026 taxes"
 
 
-def test_strip_marker_removes_recurrence_marker():
-    assert strip_marker("[R+42d] Call Alex") == "Call Alex"
-
-
-def test_strip_marker_removes_all_stacked_managed_markers():
-    assert strip_marker("[T-3d] [R+42d] Call Alex") == "Call Alex"
-
-
-def test_apply_deadline_marker_replaces_recurrence_marker():
-    assert apply_marker("[R+42d] Call Alex", "T-6d") == "[T-6d] Call Alex"
-
-
-def test_apply_recurrence_marker_replaces_deadline_marker_and_preserves_progress():
-    assert (
-        apply_marker("[T+2d] Call Alex [1/2]", "R+42d")
-        == "[R+42d] Call Alex [1/2]"
-    )
-
-
 def test_apply_marker_is_idempotent() -> None:
     once = apply_marker("File 2026 taxes", "T-15d")
     twice = apply_marker(once, "T-15d")
     assert once == twice
-
-
-def test_recurrence_marker_application_is_idempotent():
-    once = apply_marker("Call Alex", "R+42d")
-    twice = apply_marker(once, "R+42d")
-    assert twice == once
 
 
 def test_apply_marker_preserves_user_brackets() -> None:
