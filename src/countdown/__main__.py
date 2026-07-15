@@ -11,9 +11,11 @@ from zoneinfo import ZoneInfo
 
 from countdown.format import (
     PROGRESS_SUFFIX_RE,
+    RECURRENCE_PREFIX_RE,
     apply_marker,
     apply_progress_suffix,
     format_marker,
+    format_recurrence_marker,
     strip_marker,
 )
 from countdown.timezone import resolve_timezone
@@ -163,111 +165,175 @@ def _completed_subtask_counts_for_parents(client, parent_tasks) -> dict[str, int
     return counts
 
 
+def _is_recurring(task) -> bool:
+    due = getattr(task, "due", None)
+    return bool(due is not None and getattr(due, "is_recurring", False))
+
+
+def _write_content_change(
+    *,
+    client,
+    task,
+    new_content: str,
+    dry_run: bool,
+    summary: Summary,
+    stripped: bool,
+) -> None:
+    if new_content == task.content:
+        return
+    action = "strip" if stripped else "write"
+    log.info('[%s] %s "%s" (was: "%s")', action, task.id, new_content, task.content)
+    if dry_run:
+        if stripped:
+            summary.stripped += 1
+        else:
+            summary.updated += 1
+        return
+    try:
+        client.update_content(task_id=task.id, content=new_content)
+        if stripped:
+            summary.stripped += 1
+        else:
+            summary.updated += 1
+    except Exception as exc:  # noqa: BLE001
+        log.error("[error] %s %s", task.id, exc)
+        summary.errors += 1
+
+
 def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
     summary = Summary()
-    deadlined = client.list_deadlined_tasks()
-    summary.scanned = len(deadlined)
+    active_tasks = client.list_active_tasks()
+    deadlined = [
+        task for task in active_tasks if getattr(task, "deadline", None) is not None
+    ]
+    recurring = [
+        task
+        for task in active_tasks
+        if getattr(task, "deadline", None) is None and _is_recurring(task)
+    ]
+    summary.scanned = len(deadlined) + len(recurring)
+
     progress_by_parent: dict[str, tuple[int, int]] = {}
     if deadlined:
-        try:
-            active_tasks = client.list_active_tasks()
-        except Exception as exc:  # noqa: BLE001
-            log.warning(
-                "Could not fetch active tasks for subtask progress; continuing without suffixes: %s",
-                exc,
-            )
-        else:
-            open_counts = _build_open_subtask_counts(active_tasks)
-            parent_tasks_requiring_progress_sync = [
-                task for task in deadlined if open_counts.get(str(task.id), 0) > 0
+        open_counts = _build_open_subtask_counts(active_tasks)
+        parents = [
+            task
+            for task in deadlined
+            if open_counts.get(str(task.id), 0) > 0
                 or PROGRESS_SUFFIX_RE.search(task.content)
-            ]
-            completed_counts: dict[str, int] = {}
-            if parent_tasks_requiring_progress_sync:
-                try:
-                    completed_counts = _completed_subtask_counts_for_parents(
-                        client, parent_tasks_requiring_progress_sync
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    log.warning(
-                        "Could not fetch completed subtasks for progress suffixes; "
-                        "falling back to open-subtask counts only: %s",
-                        exc,
-                    )
-
-            for parent in parent_tasks_requiring_progress_sync:
-                parent_id = str(parent.id)
-                open_subtasks = open_counts.get(parent_id, 0)
-                completed_subtasks = completed_counts.get(parent_id, 0)
-                if open_subtasks <= 0 and completed_subtasks <= 0:
-                    continue
+        ]
+        completed_counts: dict[str, int] = {}
+        if parents:
+            try:
+                completed_counts = _completed_subtask_counts_for_parents(
+                    client, parents
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning(
+                    "Could not fetch completed subtasks for progress suffixes; "
+                    "falling back to open-subtask counts only: %s",
+                    exc,
+                )
+        for parent in parents:
+            parent_id = str(parent.id)
+            open_subtasks = open_counts.get(parent_id, 0)
+            completed_subtasks = completed_counts.get(parent_id, 0)
+            if open_subtasks > 0 or completed_subtasks > 0:
                 progress_by_parent[parent_id] = (
                     completed_subtasks,
                     completed_subtasks + open_subtasks,
                 )
-    deadlined_ids = {t.id for t in deadlined}
 
-    for task in deadlined:
+    now_utc = datetime.now(timezone.utc)
+    recurrence_history: dict[str, datetime] | None = {}
+    if recurring:
+        try:
+            recurrence_history = _latest_recurring_completions(
+                client,
+                recurring,
+                now_utc=now_utc,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "Could not fetch reliable recurring completion history; "
+                "preserving existing recurrence markers: %s",
+                exc,
+            )
+            recurrence_history = None
+
+    for task in active_tasks:
         if not task.content:
             log.info("[skip ] %s empty content", task.id)
             continue
-        deadline = _parse_deadline(task)
-        if deadline is None:
-            log.info("[skip ] %s malformed deadline", task.id)
+
+        deadline_field = getattr(task, "deadline", None)
+        if deadline_field is not None:
+            deadline = _parse_deadline(task)
+            if deadline is None:
+                log.info("[skip ] %s malformed deadline", task.id)
+                continue
+            delta = (deadline - today).days
+            new_content = apply_marker(task.content, format_marker(delta))
+            progress = progress_by_parent.get(str(task.id))
+            if progress is not None:
+                completed, total = progress
+                new_content = apply_progress_suffix(
+                    new_content,
+                    completed=completed,
+                    total=total,
+                )
+            _write_content_change(
+                client=client,
+                task=task,
+                new_content=new_content,
+                dry_run=dry_run,
+                summary=summary,
+                stripped=False,
+            )
             continue
 
-        delta = (deadline - today).days
-        marker = format_marker(delta)
-        new_content = apply_marker(task.content, marker)
-        progress = progress_by_parent.get(str(task.id))
-        if progress is not None:
-            completed, total = progress
-            new_content = apply_progress_suffix(
-                new_content, completed=completed, total=total
-            )
+        if _is_recurring(task):
+            if recurrence_history is None:
+                if RECURRENCE_PREFIX_RE.match(task.content):
+                    continue
+                new_content = strip_marker(task.content)
+            else:
+                completed_at = recurrence_history.get(str(task.id))
+                if completed_at is None:
+                    new_content = strip_marker(task.content)
+                else:
+                    elapsed = _elapsed_days_since(completed_at, today=today, tz=tz)
+                    new_content = apply_marker(
+                        task.content,
+                        format_recurrence_marker(elapsed),
+                    )
+                    _write_content_change(
+                        client=client,
+                        task=task,
+                        new_content=new_content,
+                        dry_run=dry_run,
+                        summary=summary,
+                        stripped=False,
+                    )
+                    continue
+        else:
+            new_content = strip_marker(task.content)
 
-        if new_content == task.content:
-            log.info(
-                '[skip ] %s "%s" delta=%d marker=%s (no change)',
-                task.id, task.content, delta, marker,
-            )
-            continue
-
-        log.info(
-            '[write] %s "%s" delta=%d marker=%s (was: "%s")',
-            task.id, new_content, delta, marker, task.content,
+        _write_content_change(
+            client=client,
+            task=task,
+            new_content=new_content,
+            dry_run=dry_run,
+            summary=summary,
+            stripped=True,
         )
-        if dry_run:
-            summary.updated += 1
-            continue
-        try:
-            client.update_content(task_id=task.id, content=new_content)
-            summary.updated += 1
-        except Exception as exc:  # noqa: BLE001
-            log.error("[error] %s %s", task.id, exc)
-            summary.errors += 1
-
-    # Strip pass: tasks bearing our marker that are no longer in the deadlined set.
-    for task in client.list_marked_tasks():
-        if task.id in deadlined_ids:
-            continue
-        new_content = strip_marker(task.content)
-        if new_content == task.content:
-            continue
-        log.info('[strip] %s "%s" deadline removed; stripping', task.id, task.content)
-        if dry_run:
-            summary.stripped += 1
-            continue
-        try:
-            client.update_content(task_id=task.id, content=new_content)
-            summary.stripped += 1
-        except Exception as exc:  # noqa: BLE001
-            log.error("[error] %s %s", task.id, exc)
-            summary.errors += 1
 
     log.info(
         "summary: scanned=%d updated=%d stripped=%d errors=%d",
-        summary.scanned, summary.updated, summary.stripped, summary.errors,
+        summary.scanned,
+        summary.updated,
+        summary.stripped,
+        summary.errors,
     )
     return summary
 
