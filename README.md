@@ -96,10 +96,12 @@ did something:
    makes Todoist schedule the next occurrence from the actual
    completion date.
 2. Complete the task after making the call.
-3. On its next run, the workflow reads Todoist completion history and
-   annotates the new recurring instance with the elapsed time since
-   that completion, such as `[R+42d] Call friend X`.
-4. Treat the due date as a cadence or reminder, not a deadline.
+3. On its next successful run, the workflow reads Todoist completion
+   history and annotates the new recurring instance as
+   `[R+0d] Call friend X`.
+4. The count increases with elapsed local calendar days; 42 days later,
+   the badge becomes `[R+42d] Call friend X`.
+5. Treat the due date as a cadence or reminder, not a deadline.
 
 If the completion-history API fails, the workflow preserves existing
 recurrence badges until a later successful run.
