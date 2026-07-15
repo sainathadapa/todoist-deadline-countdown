@@ -97,7 +97,7 @@ class TodoistClient:
 
     def list_deadlined_tasks(self):
         return retry_with_backoff(
-            lambda: _flatten(self._api.filter_tasks(query="deadline before: 5 years from now"))
+            lambda: _flatten(self._api.filter_tasks(query="!no deadline"))
         )
 
     def list_active_tasks(self):
