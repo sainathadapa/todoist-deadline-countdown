@@ -103,24 +103,25 @@ class TodoistClient:
     def list_active_tasks(self):
         return retry_with_backoff(lambda: _flatten(self._api.get_tasks()))
 
-    def list_completed_subtasks_for_parent(
-        self, *, parent_id: str, since: datetime, until: datetime
+    def _list_completed_tasks(
+        self,
+        *,
+        since: datetime,
+        until: datetime,
+        parent_id: str | None = None,
     ) -> list[dict]:
-        """Fetch completed subtasks for a parent in a completion-date window.
-
-        Uses direct REST because current SDK typing for this endpoint does not
-        expose `parent_id`, while the API supports it.
-        """
         items: list[dict] = []
         cursor: str | None = None
+        seen_cursors: set[str] = set()
 
         while True:
-            params = {
+            params: dict[str, object] = {
                 "since": since.isoformat().replace("+00:00", "Z"),
                 "until": until.isoformat().replace("+00:00", "Z"),
-                "parent_id": parent_id,
                 "limit": 200,
             }
+            if parent_id is not None:
+                params["parent_id"] = parent_id
             if cursor is not None:
                 params["cursor"] = cursor
 
@@ -134,20 +135,44 @@ class TodoistClient:
                 response.raise_for_status()
                 return response
 
-            response = retry_with_backoff(_do)
-            body = response.json()
-            page_items = body.get("items") or []
+            body = retry_with_backoff(_do).json()
+            if not isinstance(body, dict):
+                raise ValueError("Todoist completion response must be an object")
+            page_items = body.get("items", [])
+            if not isinstance(page_items, list):
+                raise ValueError("Todoist completion response items must be a list")
             items.extend(page_items)
 
-            cursor = body.get("next_cursor")
-            if not cursor:
-                break
+            next_cursor = body.get("next_cursor")
+            if next_cursor is not None and not isinstance(next_cursor, str):
+                raise ValueError("Todoist completion cursor must be a string or null")
+            if not next_cursor:
+                return items
+            if next_cursor in seen_cursors:
+                raise ValueError("Todoist completion cursor repeated")
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
 
-        return items
+    def list_completed_tasks(
+        self, *, since: datetime, until: datetime
+    ) -> list[dict]:
+        return self._list_completed_tasks(since=since, until=until)
+
+    def list_completed_subtasks_for_parent(
+        self, *, parent_id: str, since: datetime, until: datetime
+    ) -> list[dict]:
+        """Fetch completed subtasks for a parent in a completion-date window.
+
+        Uses direct REST because current SDK typing for this endpoint does not
+        expose `parent_id`, while the API supports it.
+        """
+        return self._list_completed_tasks(
+            since=since, until=until, parent_id=parent_id
+        )
 
     def list_marked_tasks(self):
         seen: dict[str, object] = {}
-        for query in ("search: T-", "search: T+"):
+        for query in ("search: T-", "search: T+", "search: R+"):
             tasks = retry_with_backoff(lambda q=query: _flatten(self._api.filter_tasks(query=q)))
             for task in tasks:
                 if MARKER_RE.search(task.content):
