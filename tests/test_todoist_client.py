@@ -59,6 +59,57 @@ def test_fetch_user_timezone_sends_bearer_token() -> None:
 
 
 @responses.activate
+def test_list_completed_tasks_paginates_without_parent_filter() -> None:
+    from datetime import datetime, timezone
+
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json={
+            "items": [{"id": "a"}],
+            "next_cursor": "next-page",
+        },
+        status=200,
+        match=[responses.matchers.query_param_matcher(
+            {
+                "since": "2026-05-01T00:00:00Z",
+                "until": "2026-05-15T00:00:00Z",
+                "limit": "200",
+            }
+        )],
+    )
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json={
+            "items": [{"id": "b"}],
+            "next_cursor": None,
+        },
+        status=200,
+        match=[responses.matchers.query_param_matcher(
+            {
+                "since": "2026-05-01T00:00:00Z",
+                "until": "2026-05-15T00:00:00Z",
+                "limit": "200",
+                "cursor": "next-page",
+            }
+        )],
+    )
+
+    client = TodoistClient(token="test-token")
+    items = client.list_completed_tasks(
+        since=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        until=datetime(2026, 5, 15, tzinfo=timezone.utc),
+    )
+
+    assert items == [{"id": "a"}, {"id": "b"}]
+    assert len(responses.calls) == 2
+    assert responses.calls[0].request.headers["Authorization"] == "Bearer test-token"
+    assert "parent_id=" not in responses.calls[0].request.url
+    assert "cursor=next-page" in responses.calls[1].request.url
+
+
+@responses.activate
 def test_list_completed_subtasks_for_parent_filters_and_paginates() -> None:
     from datetime import datetime, timezone
 
@@ -110,7 +161,107 @@ def test_list_completed_subtasks_for_parent_filters_and_paginates() -> None:
     assert responses.calls[0].request.headers["Authorization"] == "Bearer test-token"
 
 
-from unittest.mock import MagicMock, patch
+@responses.activate
+def test_list_completed_tasks_rejects_non_object_response() -> None:
+    from datetime import datetime, timezone
+
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json=[{"id": "a"}],
+        status=200,
+    )
+
+    client = TodoistClient(token="test-token")
+    with pytest.raises(
+        ValueError, match="Todoist completion response must be an object"
+    ):
+        client.list_completed_tasks(
+            since=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            until=datetime(2026, 5, 15, tzinfo=timezone.utc),
+        )
+
+
+@responses.activate
+def test_list_completed_tasks_rejects_non_list_items() -> None:
+    from datetime import datetime, timezone
+
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json={"items": "not-a-list", "next_cursor": None},
+        status=200,
+    )
+
+    client = TodoistClient(token="test-token")
+    with pytest.raises(
+        ValueError, match="Todoist completion response items must be a list"
+    ):
+        client.list_completed_tasks(
+            since=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            until=datetime(2026, 5, 15, tzinfo=timezone.utc),
+        )
+
+
+@responses.activate
+def test_list_completed_tasks_rejects_non_string_cursor() -> None:
+    from datetime import datetime, timezone
+
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json={"items": [], "next_cursor": 42},
+        status=200,
+    )
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json={"items": [], "next_cursor": None},
+        status=200,
+    )
+
+    client = TodoistClient(token="test-token")
+    with pytest.raises(
+        ValueError, match="Todoist completion cursor must be a string or null"
+    ):
+        client.list_completed_tasks(
+            since=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            until=datetime(2026, 5, 15, tzinfo=timezone.utc),
+        )
+
+
+@responses.activate
+def test_list_completed_tasks_rejects_repeated_cursor() -> None:
+    from datetime import datetime, timezone
+
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json={"items": [{"id": "a"}], "next_cursor": "repeated"},
+        status=200,
+    )
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json={"items": [{"id": "b"}], "next_cursor": "repeated"},
+        status=200,
+    )
+    responses.add(
+        method=responses.GET,
+        url=COMPLETED_URL,
+        json={"items": [{"id": "c"}], "next_cursor": None},
+        status=200,
+    )
+
+    client = TodoistClient(token="test-token")
+    with pytest.raises(ValueError, match="Todoist completion cursor repeated"):
+        client.list_completed_tasks(
+            since=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            until=datetime(2026, 5, 15, tzinfo=timezone.utc),
+        )
+
+
+from unittest.mock import MagicMock, call, patch
 
 
 @patch("countdown.todoist_client.TodoistAPI")
@@ -138,17 +289,20 @@ def test_list_active_tasks_uses_get_tasks(mock_api_cls: MagicMock) -> None:
 
 
 @patch("countdown.todoist_client.TodoistAPI")
-def test_list_marked_tasks_dedupes_across_two_searches(mock_api_cls: MagicMock) -> None:
+def test_list_marked_tasks_dedupes_across_three_searches(mock_api_cls: MagicMock) -> None:
     api = mock_api_cls.return_value
-    task_a = MagicMock(id="A", content="[T-2w] Task with marker")
+    task_a = MagicMock(id="A", content="[T-2w] Task mentioning R+ in body")
     task_b = MagicMock(id="B", content="[T+1d] Task with marker")
-    task_c = MagicMock(id="C", content="False positive containing T- in body")
+    task_c = MagicMock(id="C", content="[R+3d] Recurring task with marker")
+    false_positive = MagicMock(id="D", content="False positive containing R+ in body")
 
     def filter_side_effect(query: str):
         if query == "search: T-":
-            return iter([[task_a, task_c]])
+            return iter([[task_a]])
         if query == "search: T+":
             return iter([[task_b]])
+        if query == "search: R+":
+            return iter([[task_a, task_c, false_positive]])
         raise AssertionError(f"unexpected query: {query}")
 
     api.filter_tasks.side_effect = filter_side_effect
@@ -156,9 +310,14 @@ def test_list_marked_tasks_dedupes_across_two_searches(mock_api_cls: MagicMock) 
     client = TodoistClient(token="t")
     tasks = client.list_marked_tasks()
 
-    # task_c is filtered out because its content does not match MARKER_RE
+    assert api.filter_tasks.call_args_list == [
+        call(query="search: T-"),
+        call(query="search: T+"),
+        call(query="search: R+"),
+    ]
+    # task_a is deduplicated and the false positive does not match MARKER_RE.
     ids = sorted(t.id for t in tasks)
-    assert ids == ["A", "B"]
+    assert ids == ["A", "B", "C"]
 
 
 @patch("countdown.todoist_client.TodoistAPI")
@@ -186,6 +345,8 @@ def test_list_marked_tasks_dedupes_when_task_appears_in_both_searches(
             return iter([[same_task]])
         if query == "search: T+":
             return iter([[same_task]])
+        if query == "search: R+":
+            return iter([[]])
         raise AssertionError(f"unexpected query: {query}")
 
     api.filter_tasks.side_effect = filter_side_effect
