@@ -671,6 +671,7 @@ def test_main_strip_all_strips_marker_from_every_marked_task(
     marked = [
         MagicMock(id="A", content="[T-2w] task one"),
         MagicMock(id="B", content="[T+1d] task two"),
+        MagicMock(id="C", content="[R+42d] call friend X"),
     ]
     fake_client = MagicMock()
     fake_client.list_marked_tasks.return_value = marked
@@ -682,4 +683,5 @@ def test_main_strip_all_strips_marker_from_every_marked_task(
     assert rc == 0
     fake_client.update_content.assert_any_call(task_id="A", content="task one")
     fake_client.update_content.assert_any_call(task_id="B", content="task two")
-    assert fake_client.update_content.call_count == 2
+    fake_client.update_content.assert_any_call(task_id="C", content="call friend X")
+    assert fake_client.update_content.call_count == 3

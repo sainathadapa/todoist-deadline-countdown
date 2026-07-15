@@ -1,8 +1,9 @@
-# Todoist Deadline Countdown
+# Todoist Deadline Countdown & Recurring Count-Up
 
-Live countdown badges on every Todoist task that has a deadline — no
-server, no signup, no third party sees your tasks. Runs in *your own*
-GitHub account on the free Actions tier.
+Live countdown badges on Todoist tasks with deadlines, plus count-up
+badges showing how long it has been since you completed a recurring
+task — no server, no signup, no third party sees your tasks. Runs in
+*your own* GitHub account on the free Actions tier.
 
 | Before | After |
 |---|---|
@@ -11,6 +12,7 @@ GitHub account on the free Actions tier.
 | Pay rent | `[T-0d] Pay rent` |
 | Submit assignment | `[T+3d] Submit assignment` |
 | Plan launch *(with subtasks)* | `[T-15d] Plan launch [7/13]` |
+| Call friend X *(recurring every! 6 weeks)* | `[R+42d] Call friend X` |
 
 ## Setup (5 minutes)
 
@@ -45,13 +47,16 @@ From here on it runs automatically every 3 hours.
 ## How do I know it's working?
 
 - Open Todoist — every task with a deadline now starts with `[T-Nd]`,
-  `[T-Nw]`, `[T+Nd]`, or `[T+Nw]`.
-- Parent tasks that currently have subtasks also end with progress like
-  `[7/13]` (7 completed out of 13 total subtasks).
+  `[T-Nw]`, `[T+Nd]`, or `[T+Nw]`. Recurring tasks start with an
+  `[R+Nd]` or `[R+Nw]` badge after their first completion.
+- Deadlined parent tasks that currently have subtasks also end with
+  progress like `[7/13]` (7 completed out of 13 total subtasks).
 - The **Actions** tab shows a green check after each scheduled run, plus
   a step summary with how many tasks were scanned and updated.
 
 ## What the badges mean
+
+### Deadline countdowns
 
 | Time to deadline | Badge |
 |---|---|
@@ -61,18 +66,43 @@ From here on it runs automatically every 3 hours.
 | 1–99 days overdue | `[T+Nd]` (e.g. `[T+1d]`, `[T+10d]`) |
 | 100+ days overdue | `[T+Nw]` (e.g. `[T+14w]`) |
 
-For parent tasks with subtasks, a trailing progress suffix is also
-added: `[done/total]` (for example `[7/13]`).
+For deadlined parent tasks with subtasks, a trailing progress suffix is
+also added: `[done/total]` (for example `[7/13]`). Subtask progress
+suffixes are deadline-only and are not added to recurring count-ups.
+
+### Recurring-task count-ups
+
+| Time since latest completion | Badge |
+|---|---|
+| 0–99 days | `[R+Nd]` (e.g. `[R+0d]`, `[R+42d]`, `[R+99d]`) |
+| 100+ days | `[R+Nw]`, rounded to weeks (e.g. `[R+14w]`, `[R+52w]`) |
+
+A recurrence badge appears only after the task has been completed at
+least once. If Todoist returns both deadline and recurrence metadata
+for a task, the deadline countdown wins.
 
 ## FAQ
 
 ### Does it work on the free Todoist plan?
-**No.** The `deadline` field is Todoist Pro/Business only. (This is
-*different* from the regular due date.)
+**Yes, for recurring count-ups.** They work with recurring due dates.
+Deadline countdown badges still require a Todoist plan that exposes the
+`deadline` field, which is different from the regular due date.
 
 ### What about recurring tasks?
-Todoist doesn't allow deadlines on recurring tasks, so they're never
-touched.
+Use the recurring count-up to see how long it has been since you last
+did something:
+
+1. Create `Call friend X` with `every! 6 weeks`. The exclamation mark
+   makes Todoist schedule the next occurrence from the actual
+   completion date.
+2. Complete the task after making the call.
+3. On its next run, the workflow reads Todoist completion history and
+   annotates the new recurring instance with the elapsed time since
+   that completion, such as `[R+42d] Call friend X`.
+4. Treat the due date as a cadence or reminder, not a deadline.
+
+If the completion-history API fails, the workflow preserves existing
+recurrence badges until a later successful run.
 
 ### How do I share this with my partner / friend?
 They make their own copy of the template with their own token. Each
@@ -102,7 +132,7 @@ TODOIST_API_TOKEN=your-token uv run python -m countdown doctor
 Prints your detected time zone if the token is valid.
 
 ### How do I uninstall?
-Strip every badge from every task:
+Strip every deadline and recurrence badge from every task:
 ```bash
 TODOIST_API_TOKEN=your-token uv run python -m countdown --strip-all
 ```
@@ -130,11 +160,13 @@ usually not the cleanest upgrade path.
 ## Idempotency
 
 The script identifies its own annotations using the regex
-`^\s*\[T[+-]\d+[dwm]\]\s*` anchored at start-of-string. Anything not
-matching that pattern — including user-typed text like `[draft]`
-mid-title or a literal `T-15d` in the body — is left untouched. Running
-the workflow more often than needed is safe; mid-day runs that find
-nothing to change are no-ops.
+`^\s*\[(?:T[+-]\d+[dwm]|R\+\d+[dw])\]\s*` anchored at
+start-of-string. This covers both deadline and recurrence markers, and
+`--strip-all` removes both marker families. Anything not matching that
+pattern — including user-typed text like `[draft]` mid-title or a
+literal `T-15d` in the body — is left untouched. Running the workflow
+more often than needed is safe; mid-day runs that find nothing to
+change are no-ops.
 
 ## Local development
 
