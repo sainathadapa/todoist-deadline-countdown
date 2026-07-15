@@ -294,9 +294,12 @@ def run(*, client, today: date, tz: ZoneInfo, dry_run: bool) -> Summary:
 
         if _is_recurring(task):
             if recurrence_history is None:
-                if RECURRENCE_PREFIX_RE.match(task.content):
-                    continue
-                new_content = strip_marker(task.content)
+                trusted_recurrence = RECURRENCE_PREFIX_RE.match(task.content)
+                if trusted_recurrence:
+                    trusted_marker = trusted_recurrence.group().strip()[1:-1]
+                    new_content = apply_marker(task.content, trusted_marker)
+                else:
+                    new_content = strip_marker(task.content)
             else:
                 completed_at = recurrence_history.get(str(task.id))
                 if completed_at is None:

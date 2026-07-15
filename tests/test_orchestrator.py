@@ -555,6 +555,32 @@ def _history_failure_tasks():
     ]
 
 
+def test_run_normalizes_stacked_markers_when_preserving_recurrence_age() -> None:
+    task = _task(
+        "friend",
+        "[R+7d] [T-3d] Call friend",
+        None,
+        recurring=True,
+        created_at=_dt(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    client = MagicMock()
+    client.list_active_tasks.return_value = [task]
+    client.list_completed_tasks.side_effect = [[], RuntimeError("simulated")]
+
+    summary = run(
+        client=client,
+        today=date(2026, 7, 15),
+        tz=ZoneInfo("America/New_York"),
+        dry_run=False,
+    )
+
+    client.update_content.assert_called_once_with(
+        task_id="friend", content="[R+7d] Call friend"
+    )
+    assert summary.scanned == 1
+    assert summary.errors == 0
+
+
 def test_run_preserves_recurrence_markers_when_history_request_fails() -> None:
     client = MagicMock()
     client.list_active_tasks.return_value = _history_failure_tasks()
