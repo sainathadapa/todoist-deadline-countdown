@@ -65,6 +65,76 @@ def _to_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _parse_timestamp(value: object) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise ValueError("completion timestamp must be a non-empty string")
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError(f"invalid completion timestamp: {value!r}") from exc
+    if parsed.tzinfo is None:
+        raise ValueError("completion timestamp must include a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+def _record_field(record: object, field: str) -> object:
+    if isinstance(record, dict):
+        return record.get(field)
+    return getattr(record, field, None)
+
+
+def _latest_recurring_completions(
+    client, tasks, *, now_utc: datetime
+) -> dict[str, datetime]:
+    now_utc = _to_utc(now_utc)
+    created_by_id: dict[str, datetime] = {}
+    for task in tasks:
+        created_at = getattr(task, "created_at", None)
+        if not isinstance(created_at, datetime):
+            raise ValueError(f"task {task.id} has invalid created_at")
+        created_by_id[str(task.id)] = _to_utc(created_at)
+
+    latest: dict[str, datetime] = {}
+    unresolved = set(created_by_id)
+    until = now_utc
+    window = timedelta(days=COMPLETED_LOOKBACK_WINDOW_DAYS)
+
+    while unresolved:
+        earliest_creation = min(created_by_id[task_id] for task_id in unresolved)
+        since = max(until - window, earliest_creation)
+        if since >= until:
+            break
+
+        records = client.list_completed_tasks(since=since, until=until)
+        matches: dict[str, datetime] = {}
+        for record in records:
+            raw_id = _record_field(record, "id")
+            if not isinstance(raw_id, str) or not raw_id:
+                raise ValueError("completion record has invalid id")
+            completed_at = _parse_timestamp(_record_field(record, "completed_at"))
+            if raw_id in unresolved:
+                matches[raw_id] = max(matches.get(raw_id, completed_at), completed_at)
+
+        latest.update(matches)
+        unresolved.difference_update(matches)
+        unresolved = {
+            task_id
+            for task_id in unresolved
+            if created_by_id[task_id] < since
+        }
+        until = since
+
+    return latest
+
+
+def _elapsed_days_since(
+    completed_at: datetime, *, today: date, tz: ZoneInfo
+) -> int:
+    completed_day = _to_utc(completed_at).astimezone(tz).date()
+    return max(0, (today - completed_day).days)
+
+
 def _completed_subtask_counts_for_parents(client, parent_tasks) -> dict[str, int]:
     """Map parent task id -> completed subtask count from completion history."""
     counts: dict[str, int] = {}
