@@ -32,7 +32,7 @@
 - Modify: `tests/test_format.py`
 - Modify: `tests/test_idempotency.py`
 
-- [ ] **Step 1: Add failing recurrence-format boundary tests**
+- [x] **Step 1: Add failing recurrence-format boundary tests**
 
 In `tests/test_format.py`, import `format_recurrence_marker` and add:
 
@@ -52,7 +52,7 @@ def test_format_recurrence_marker(elapsed_days, expected):
     assert format_recurrence_marker(elapsed_days) == expected
 ```
 
-- [ ] **Step 2: Add failing strip/apply tests for recurrence and stacked stale markers**
+- [x] **Step 2: Add failing strip/apply tests for recurrence and stacked stale markers**
 
 In `tests/test_idempotency.py`, extend the imports with `apply_marker` and
 `strip_marker`, then add cases that establish one managed-marker family and
@@ -87,7 +87,7 @@ def test_recurrence_marker_application_is_idempotent():
     assert twice == once
 ```
 
-- [ ] **Step 3: Run the focused tests and confirm they fail**
+- [x] **Step 3: Run the focused tests and confirm they fail**
 
 Run:
 
@@ -97,7 +97,7 @@ uv run pytest tests/test_format.py tests/test_idempotency.py -q
 
 Expected: failures because `format_recurrence_marker` does not exist and current marker regexes only recognize `T` markers.
 
-- [ ] **Step 4: Implement recurrence formatting and unified managed-marker regexes**
+- [x] **Step 4: Implement recurrence formatting and unified managed-marker regexes**
 
 In `src/countdown/format.py`, add:
 
@@ -123,13 +123,13 @@ MARKER_RE = re.compile(r"\[(?:T[+-]\d+[dwm]|R\+\d+[dw])\]")
 
 Keep `strip_marker()` and `apply_marker()` as the single replacement path so either marker replaces all stale leading managed markers.
 
-- [ ] **Step 5: Run focused tests and confirm green**
+- [x] **Step 5: Run focused tests and confirm green**
 
 ```bash
 uv run pytest tests/test_format.py tests/test_idempotency.py -q
 ```
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add src/countdown/format.py tests/test_format.py tests/test_idempotency.py
@@ -145,7 +145,7 @@ git commit -m "feat: add recurring task age markers"
 - Modify: `src/countdown/todoist_client.py`
 - Modify: `tests/test_todoist_client.py`
 
-- [ ] **Step 1: Add failing tests for account-level completion-history pagination**
+- [x] **Step 1: Add failing tests for account-level completion-history pagination**
 
 In `tests/test_todoist_client.py`, add `responses`-based HTTP tests that verify:
 
@@ -166,7 +166,7 @@ assert "parent_id=" not in responses.calls[0].request.url
 assert "cursor=next-page" in responses.calls[1].request.url
 ```
 
-- [ ] **Step 2: Add failing response-validation tests**
+- [x] **Step 2: Add failing response-validation tests**
 
 Add tests asserting that `ValueError` is raised for:
 
@@ -177,17 +177,17 @@ Add tests asserting that `ValueError` is raised for:
 
 Do not validate individual completion record fields here; the history resolver owns semantic validation so one malformed record invalidates the recurrence run.
 
-- [ ] **Step 3: Add a failing marker-search test for `R+`**
+- [x] **Step 3: Add a failing marker-search test for `R+`**
 
 Extend `test_list_marked_tasks_dedupes_across_two_searches` (and rename it to end in `three_searches`) to expect queries for `search: T-`, `search: T+`, and `search: R+`, deduplicate by task ID, and reject search false positives whose content lacks a managed marker. Update `test_list_marked_tasks_dedupes_when_task_appears_in_both_searches` as well so its side effect returns an empty page for `search: R+` rather than treating the new query as unexpected.
 
-- [ ] **Step 4: Run focused tests and confirm they fail**
+- [x] **Step 4: Run focused tests and confirm they fail**
 
 ```bash
 uv run pytest tests/test_todoist_client.py -q
 ```
 
-- [ ] **Step 5: Extract one private completion-page loop and add the public account method**
+- [x] **Step 5: Extract one private completion-page loop and add the public account method**
 
 Implement the following shape in `TodoistClient`:
 
@@ -257,13 +257,13 @@ def list_completed_subtasks_for_parent(
 
 Extend `list_marked_tasks()` to include `search: R+`.
 
-- [ ] **Step 6: Run focused tests and confirm green**
+- [x] **Step 6: Run focused tests and confirm green**
 
 ```bash
 uv run pytest tests/test_todoist_client.py -q
 ```
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 ```bash
 git add src/countdown/todoist_client.py tests/test_todoist_client.py
@@ -279,7 +279,7 @@ git commit -m "feat: fetch recurring completion history"
 - Create: `tests/test_recurrence.py`
 - Modify: `src/countdown/__main__.py`
 
-- [ ] **Step 1: Add failing timestamp and elapsed-day tests**
+- [x] **Step 1: Add failing timestamp and elapsed-day tests**
 
 Create `tests/test_recurrence.py` and test private helpers directly:
 
@@ -327,7 +327,7 @@ def test_elapsed_days_clamps_future_completion_to_zero():
     assert _elapsed_days_since(completed, today=date(2026, 7, 15), tz=tz) == 0
 ```
 
-- [ ] **Step 2: Add failing backward-window history tests**
+- [x] **Step 2: Add failing backward-window history tests**
 
 Build lightweight task objects with `id` and timezone-aware `created_at`, plus a fake client that records `(since, until)` calls.
 
@@ -364,13 +364,13 @@ def test_latest_recurring_completions_chooses_newest_match():
     assert client.calls == [(now - timedelta(days=89), now)]
 ```
 
-- [ ] **Step 3: Run the new test module and confirm it fails**
+- [x] **Step 3: Run the new test module and confirm it fails**
 
 ```bash
 uv run pytest tests/test_recurrence.py -q
 ```
 
-- [ ] **Step 4: Implement strict record parsing and reverse-window resolution**
+- [x] **Step 4: Implement strict record parsing and reverse-window resolution**
 
 Add to `src/countdown/__main__.py`:
 
@@ -447,19 +447,19 @@ def _elapsed_days_since(
 
 Important: parse every record in every fetched page before accepting the window. This enforces the approved all-or-nothing history reliability rule.
 
-- [ ] **Step 5: Run recurrence tests and confirm green**
+- [x] **Step 5: Run recurrence tests and confirm green**
 
 ```bash
 uv run pytest tests/test_recurrence.py -q
 ```
 
-- [ ] **Step 6: Run existing subtask-history tests for regression coverage**
+- [x] **Step 6: Run existing subtask-history tests for regression coverage**
 
 ```bash
 uv run pytest tests/test_orchestrator.py tests/test_todoist_client.py -q
 ```
 
-- [ ] **Step 7: Commit Task 3**
+- [x] **Step 7: Commit Task 3**
 
 ```bash
 git add src/countdown/__main__.py tests/test_recurrence.py
@@ -475,7 +475,7 @@ git commit -m "feat: resolve latest recurring completions"
 - Modify: `src/countdown/__main__.py`
 - Modify: `tests/test_orchestrator.py`
 
-- [ ] **Step 1: Make the orchestrator test task factory model `due.is_recurring` explicitly**
+- [x] **Step 1: Make the orchestrator test task factory model `due.is_recurring` explicitly**
 
 Update `_task()` in `tests/test_orchestrator.py` so `MagicMock` cannot accidentally make every task truthy-recurring:
 
@@ -505,7 +505,7 @@ def _task(
 
 Also update the datetime-deadline test's hand-built task to set `due=None`.
 
-- [ ] **Step 2: Migrate existing tests to one authoritative active-task fetch**
+- [x] **Step 2: Migrate existing tests to one authoritative active-task fetch**
 
 For every existing `run()` test:
 
@@ -530,7 +530,7 @@ def test_run_propagates_authoritative_active_task_fetch_failure():
         )
 ```
 
-- [ ] **Step 3: Add failing recurrence lifecycle tests**
+- [x] **Step 3: Add failing recurrence lifecycle tests**
 
 Update the test module's datetime imports to include `timezone`, then add focused orchestrator cases using timezone-aware `created_at` values and completion records:
 
@@ -578,7 +578,7 @@ def test_run_adds_age_since_latest_recurring_completion():
     assert summary.updated == 1
 ```
 
-- [ ] **Step 4: Add failing all-or-nothing history-failure tests**
+- [x] **Step 4: Add failing all-or-nothing history-failure tests**
 
 Cover request failure and malformed-record failure. In both cases:
 
@@ -591,13 +591,13 @@ Cover request failure and malformed-record failure. In both cases:
 
 Use `client.list_completed_tasks.side_effect` to return one empty window and then raise, proving the result is discarded for the run.
 
-- [ ] **Step 5: Run orchestrator tests and confirm the new expectations fail**
+- [x] **Step 5: Run orchestrator tests and confirm the new expectations fail**
 
 ```bash
 uv run pytest tests/test_orchestrator.py -q
 ```
 
-- [ ] **Step 6: Add recurrence classification and imports**
+- [x] **Step 6: Add recurrence classification and imports**
 
 Import `RECURRENCE_PREFIX_RE` and `format_recurrence_marker` from `countdown.format`, then add:
 
@@ -607,7 +607,7 @@ def _is_recurring(task) -> bool:
     return bool(due is not None and getattr(due, "is_recurring", False))
 ```
 
-- [ ] **Step 7: Refactor `run()` around the active task set**
+- [x] **Step 7: Refactor `run()` around the active task set**
 
 Implement a shared content-change helper and refactor `run()` to the exact flow below. This preserves the existing dry-run counters, progress calculation, and isolated per-task update errors while making active tasks authoritative.
 
@@ -784,13 +784,13 @@ Capture `now_utc = datetime.now(timezone.utc)` once near the start of `run()` fo
 
 When recurrence history is unavailable, only a leading `RECURRENCE_PREFIX_RE` is trusted and preserved. `strip_marker()` removes a stale deadline marker on an eligible recurring task that does not already carry a trusted recurrence marker.
 
-- [ ] **Step 8: Run orchestrator tests and confirm green**
+- [x] **Step 8: Run orchestrator tests and confirm green**
 
 ```bash
 uv run pytest tests/test_orchestrator.py -q
 ```
 
-- [ ] **Step 9: Run all implementation-focused tests**
+- [x] **Step 9: Run all implementation-focused tests**
 
 ```bash
 uv run pytest \
@@ -801,7 +801,7 @@ uv run pytest \
   tests/test_orchestrator.py -q
 ```
 
-- [ ] **Step 10: Commit Task 4**
+- [x] **Step 10: Commit Task 4**
 
 ```bash
 git add src/countdown/__main__.py tests/test_orchestrator.py
@@ -817,7 +817,7 @@ git commit -m "feat: annotate recurring tasks since completion"
 - Modify: `README.md`
 - Modify: `tests/test_orchestrator.py`
 
-- [ ] **Step 1: Add a failing `--strip-all` recurrence-marker case**
+- [x] **Step 1: Add a failing `--strip-all` recurrence-marker case**
 
 Extend `test_main_strip_all_strips_marker_from_every_marked_task` with:
 
@@ -827,7 +827,7 @@ MagicMock(id="C", content="[R+42d] call friend X")
 
 Assert it is updated to `call friend X` and update the expected call count to three.
 
-- [ ] **Step 2: Run the focused CLI test as regression coverage**
+- [x] **Step 2: Run the focused CLI test as regression coverage**
 
 ```bash
 uv run pytest tests/test_orchestrator.py::test_main_strip_all_strips_marker_from_every_marked_task -q
@@ -835,7 +835,7 @@ uv run pytest tests/test_orchestrator.py::test_main_strip_all_strips_marker_from
 
 Expected: pass, because Task 1 made `strip_marker()` understand recurrence markers. This test locks that behavior into the CLI contract.
 
-- [ ] **Step 3: Update README examples and badge semantics**
+- [x] **Step 3: Update README examples and badge semantics**
 
 Change the title and introduction to cover both deadline countdowns and recurring-task count-ups. Add a before/after example:
 
@@ -853,7 +853,7 @@ Document:
 
 Update the free-plan FAQ as well: recurring count-up works with recurring due dates, while deadline countdown badges still require a Todoist plan that exposes the `deadline` field.
 
-- [ ] **Step 4: Replace the outdated recurring-task FAQ**
+- [x] **Step 4: Replace the outdated recurring-task FAQ**
 
 Explain the intended workflow concretely:
 
@@ -864,7 +864,7 @@ Explain the intended workflow concretely:
 
 Mention that completion-history API failures preserve existing recurrence badges until a later successful run.
 
-- [ ] **Step 5: Update idempotency and uninstall documentation**
+- [x] **Step 5: Update idempotency and uninstall documentation**
 
 Describe the managed leading-marker grammar as both deadline and recurrence markers:
 
@@ -874,14 +874,14 @@ Describe the managed leading-marker grammar as both deadline and recurrence mark
 
 State that `--strip-all` removes both marker families.
 
-- [ ] **Step 6: Run CLI and full tests**
+- [x] **Step 6: Run CLI and full tests**
 
 ```bash
 uv run pytest tests/test_orchestrator.py -q
 uv run pytest -q
 ```
 
-- [ ] **Step 7: Commit Task 5**
+- [x] **Step 7: Commit Task 5**
 
 ```bash
 git add README.md tests/test_orchestrator.py
@@ -896,7 +896,7 @@ git commit -m "docs: explain recurring task count-up"
 
 - Modify: `docs/superpowers/plans/2026-07-15-recurring-task-count-up.md`
 
-- [ ] **Step 1: Run the complete test suite from a clean process**
+- [x] **Step 1: Run the complete test suite from a clean process**
 
 ```bash
 uv run pytest
@@ -904,7 +904,7 @@ uv run pytest
 
 Expected: all tests pass with no warnings introduced by this feature.
 
-- [ ] **Step 2: Run static repository checks**
+- [x] **Step 2: Run static repository checks**
 
 ```bash
 git diff --check
@@ -914,7 +914,7 @@ git log --oneline -8
 
 Expected: no whitespace errors; only intentional plan bookkeeping may remain uncommitted.
 
-- [ ] **Step 3: Review behavior against the approved design**
+- [x] **Step 3: Review behavior against the approved design**
 
 Manually verify each invariant:
 
@@ -926,14 +926,14 @@ Manually verify each invariant:
 - all date arithmetic uses the resolved Todoist timezone;
 - dry-run and `--strip-all` are covered.
 
-- [ ] **Step 4: Mark completed plan checkboxes and commit the bookkeeping update**
+- [x] **Step 4: Mark completed plan checkboxes and commit the bookkeeping update**
 
 ```bash
 git add docs/superpowers/plans/2026-07-15-recurring-task-count-up.md
 git commit -m "docs: complete recurring count-up plan"
 ```
 
-- [ ] **Step 5: Confirm the final working tree is clean**
+- [x] **Step 5: Confirm the final working tree is clean**
 
 ```bash
 git status --short
