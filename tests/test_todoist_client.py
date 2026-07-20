@@ -6,6 +6,7 @@ from countdown.todoist_client import TodoistClient
 
 USER_URL = "https://api.todoist.com/api/v1/user"
 COMPLETED_URL = "https://api.todoist.com/api/v1/tasks/completed/by_completion_date"
+ACTIVITIES_URL = "https://api.todoist.com/api/v1/activities"
 
 
 @responses.activate
@@ -159,6 +160,128 @@ def test_list_completed_subtasks_for_parent_filters_and_paginates() -> None:
     assert [item["id"] for item in items] == ["c1", "c2", "c3"]
     assert len(responses.calls) == 2
     assert responses.calls[0].request.headers["Authorization"] == "Bearer test-token"
+
+
+@responses.activate
+def test_list_completed_item_activities_filters_and_paginates() -> None:
+    from datetime import datetime, timezone
+
+    responses.add(
+        method=responses.GET,
+        url=ACTIVITIES_URL,
+        json={
+            "results": [{"object_id": "habit", "event_date": "2026-05-10T12:00:00Z"}],
+            "next_cursor": "next-page",
+        },
+        status=200,
+        match=[responses.matchers.query_param_matcher(
+            {
+                "date_from": "2026-05-01T00:00:00Z",
+                "date_to": "2026-05-15T00:00:00Z",
+                "object_event_types": '["item:completed"]',
+                "limit": "200",
+            }
+        )],
+    )
+    responses.add(
+        method=responses.GET,
+        url=ACTIVITIES_URL,
+        json={
+            "results": [{"object_id": "friend", "event_date": "2026-05-12T12:00:00Z"}],
+            "next_cursor": None,
+        },
+        status=200,
+        match=[responses.matchers.query_param_matcher(
+            {
+                "date_from": "2026-05-01T00:00:00Z",
+                "date_to": "2026-05-15T00:00:00Z",
+                "object_event_types": '["item:completed"]',
+                "limit": "200",
+                "cursor": "next-page",
+            }
+        )],
+    )
+
+    client = TodoistClient(token="test-token")
+    events = client.list_completed_item_activities(
+        since=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        until=datetime(2026, 5, 15, tzinfo=timezone.utc),
+    )
+
+    assert events == [
+        {"object_id": "habit", "event_date": "2026-05-10T12:00:00Z"},
+        {"object_id": "friend", "event_date": "2026-05-12T12:00:00Z"},
+    ]
+    assert len(responses.calls) == 2
+    assert responses.calls[0].request.headers["Authorization"] == "Bearer test-token"
+    assert "cursor=next-page" in responses.calls[1].request.url
+
+
+@responses.activate
+def test_list_completed_item_activities_rejects_non_object_response() -> None:
+    from datetime import datetime, timezone
+
+    responses.add(
+        method=responses.GET,
+        url=ACTIVITIES_URL,
+        json=[{"object_id": "habit"}],
+        status=200,
+    )
+
+    client = TodoistClient(token="test-token")
+    with pytest.raises(
+        ValueError, match="Todoist activity response must be an object"
+    ):
+        client.list_completed_item_activities(
+            since=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            until=datetime(2026, 5, 15, tzinfo=timezone.utc),
+        )
+
+
+@responses.activate
+def test_list_completed_item_activities_rejects_non_list_results() -> None:
+    from datetime import datetime, timezone
+
+    responses.add(
+        method=responses.GET,
+        url=ACTIVITIES_URL,
+        json={"results": "not-a-list", "next_cursor": None},
+        status=200,
+    )
+
+    client = TodoistClient(token="test-token")
+    with pytest.raises(
+        ValueError, match="Todoist activity response results must be a list"
+    ):
+        client.list_completed_item_activities(
+            since=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            until=datetime(2026, 5, 15, tzinfo=timezone.utc),
+        )
+
+
+@responses.activate
+def test_list_completed_item_activities_rejects_repeated_cursor() -> None:
+    from datetime import datetime, timezone
+
+    responses.add(
+        method=responses.GET,
+        url=ACTIVITIES_URL,
+        json={"results": [{"object_id": "habit"}], "next_cursor": "repeated"},
+        status=200,
+    )
+    responses.add(
+        method=responses.GET,
+        url=ACTIVITIES_URL,
+        json={"results": [{"object_id": "friend"}], "next_cursor": "repeated"},
+        status=200,
+    )
+
+    client = TodoistClient(token="test-token")
+    with pytest.raises(ValueError, match="Todoist activity cursor repeated"):
+        client.list_completed_item_activities(
+            since=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            until=datetime(2026, 5, 15, tzinfo=timezone.utc),
+        )
 
 
 @responses.activate

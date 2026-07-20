@@ -108,13 +108,19 @@ def _latest_recurring_completions(
         if since >= until:
             break
 
-        records = client.list_completed_tasks(since=since, until=until)
+        records = client.list_completed_item_activities(since=since, until=until)
         matches: dict[str, datetime] = {}
         for record in records:
-            raw_id = _record_field(record, "id")
+            raw_event_type = _record_field(record, "event_type")
+            if raw_event_type is not None and raw_event_type != "completed":
+                raise ValueError("activity event has invalid event_type")
+            raw_object_type = _record_field(record, "object_type")
+            if raw_object_type is not None and raw_object_type != "item":
+                raise ValueError("activity event has invalid object_type")
+            raw_id = _record_field(record, "object_id")
             if not isinstance(raw_id, str) or not raw_id:
-                raise ValueError("completion record has invalid id")
-            completed_at = _parse_timestamp(_record_field(record, "completed_at"))
+                raise ValueError("activity event has invalid object_id")
+            completed_at = _parse_timestamp(_record_field(record, "event_date"))
             if raw_id in unresolved:
                 matches[raw_id] = max(matches.get(raw_id, completed_at), completed_at)
 

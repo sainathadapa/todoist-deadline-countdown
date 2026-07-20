@@ -16,7 +16,7 @@ class FakeClient:
         self.pages = iter(pages)
         self.calls = []
 
-    def list_completed_tasks(self, *, since, until):
+    def list_completed_item_activities(self, *, since, until):
         self.calls.append((since, until))
         return next(self.pages)
 
@@ -59,8 +59,8 @@ def test_latest_recurring_completions_chooses_newest_match():
     )
     client = FakeClient(
         [[
-            {"id": "friend-x", "completed_at": "2026-07-01T12:00:00Z"},
-            {"id": "friend-x", "completed_at": "2026-07-10T12:00:00Z"},
+            {"object_id": "friend-x", "event_date": "2026-07-01T12:00:00Z"},
+            {"object_id": "friend-x", "event_date": "2026-07-10T12:00:00Z"},
         ]]
     )
 
@@ -81,7 +81,7 @@ def test_latest_recurring_completions_moves_backward_in_consecutive_windows():
     client = FakeClient(
         [
             [],
-            [{"id": "friend-x", "completed_at": "2026-03-01T12:00:00Z"}],
+            [{"object_id": "friend-x", "event_date": "2026-03-01T12:00:00Z"}],
         ]
     )
 
@@ -114,7 +114,7 @@ def test_latest_recurring_completions_ignores_unrelated_task_ids():
     created_at = datetime(2026, 5, 1, tzinfo=timezone.utc)
     task = SimpleNamespace(id="friend-x", created_at=created_at)
     client = FakeClient(
-        [[{"id": "someone-else", "completed_at": "2026-07-10T12:00:00Z"}]]
+        [[{"object_id": "someone-else", "event_date": "2026-07-10T12:00:00Z"}]]
     )
 
     result = _latest_recurring_completions(client, [task], now_utc=now)
@@ -126,8 +126,8 @@ def test_latest_recurring_completions_ignores_unrelated_task_ids():
 @pytest.mark.parametrize(
     "malformed_record",
     [
-        {"id": None, "completed_at": "2026-07-11T12:00:00Z"},
-        {"id": "someone-else", "completed_at": "not-a-date"},
+        {"object_id": None, "event_date": "2026-07-11T12:00:00Z"},
+        {"object_id": "someone-else", "event_date": "not-a-date"},
     ],
 )
 def test_latest_recurring_completions_rejects_malformed_record_in_valid_response(
@@ -140,7 +140,7 @@ def test_latest_recurring_completions_rejects_malformed_record_in_valid_response
     )
     client = FakeClient(
         [[
-            {"id": "friend-x", "completed_at": "2026-07-10T12:00:00Z"},
+            {"object_id": "friend-x", "event_date": "2026-07-10T12:00:00Z"},
             malformed_record,
         ]]
     )

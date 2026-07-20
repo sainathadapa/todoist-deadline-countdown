@@ -1,7 +1,8 @@
-"""Thin wrapper over the Todoist SDK plus one direct REST call for user.tz_info."""
+"""Thin wrapper over the Todoist SDK plus direct REST calls the SDK lacks."""
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime
 from itertools import chain
@@ -16,6 +17,7 @@ USER_URL = "https://api.todoist.com/api/v1/user"
 COMPLETED_BY_COMPLETION_DATE_URL = (
     "https://api.todoist.com/api/v1/tasks/completed/by_completion_date"
 )
+ACTIVITIES_URL = "https://api.todoist.com/api/v1/activities"
 
 T = TypeVar("T")
 
@@ -169,6 +171,52 @@ class TodoistClient:
         return self._list_completed_tasks(
             since=since, until=until, parent_id=parent_id
         )
+
+    def list_completed_item_activities(
+        self, *, since: datetime, until: datetime
+    ) -> list[dict]:
+        """Fetch item completion events from Todoist's activity log."""
+        events: list[dict] = []
+        cursor: str | None = None
+        seen_cursors: set[str] = set()
+
+        while True:
+            params: dict[str, object] = {
+                "date_from": since.isoformat().replace("+00:00", "Z"),
+                "date_to": until.isoformat().replace("+00:00", "Z"),
+                "object_event_types": json.dumps(["item:completed"]),
+                "limit": 200,
+            }
+            if cursor is not None:
+                params["cursor"] = cursor
+
+            def _do():
+                response = requests.get(
+                    ACTIVITIES_URL,
+                    headers={"Authorization": f"Bearer {self._token}"},
+                    params=params,
+                    timeout=30,
+                )
+                response.raise_for_status()
+                return response
+
+            body = retry_with_backoff(_do).json()
+            if not isinstance(body, dict):
+                raise ValueError("Todoist activity response must be an object")
+            page_events = body.get("results", [])
+            if not isinstance(page_events, list):
+                raise ValueError("Todoist activity response results must be a list")
+            events.extend(page_events)
+
+            next_cursor = body.get("next_cursor")
+            if next_cursor is not None and not isinstance(next_cursor, str):
+                raise ValueError("Todoist activity cursor must be a string or null")
+            if not next_cursor:
+                return events
+            if next_cursor in seen_cursors:
+                raise ValueError("Todoist activity cursor repeated")
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
 
     def list_marked_tasks(self):
         seen: dict[str, object] = {}
