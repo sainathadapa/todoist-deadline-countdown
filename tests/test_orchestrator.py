@@ -239,8 +239,8 @@ def test_run_adds_zero_day_age_since_latest_recurring_completion() -> None:
     )
     client = MagicMock()
     client.list_active_tasks.return_value = [task]
-    client.list_completed_tasks.return_value = [
-        {"id": "daily", "completed_at": "2026-07-15T12:00:00Z"}
+    client.list_completed_item_activities.return_value = [
+        {"object_id": "daily", "event_date": "2026-07-15T12:00:00Z"}
     ]
 
     summary = run(
@@ -268,8 +268,8 @@ def test_run_adds_age_since_latest_recurring_completion() -> None:
     )
     client = MagicMock()
     client.list_active_tasks.return_value = [task]
-    client.list_completed_tasks.return_value = [
-        {"id": "friend-x", "completed_at": "2026-06-03T12:00:00Z"}
+    client.list_completed_item_activities.return_value = [
+        {"object_id": "friend-x", "event_date": "2026-06-03T12:00:00Z"}
     ]
 
     summary = run(
@@ -296,8 +296,8 @@ def test_run_is_idempotent_when_recurrence_marker_is_correct() -> None:
     )
     client = MagicMock()
     client.list_active_tasks.return_value = [task]
-    client.list_completed_tasks.return_value = [
-        {"id": "friend-x", "completed_at": "2026-06-03T12:00:00Z"}
+    client.list_completed_item_activities.return_value = [
+        {"object_id": "friend-x", "event_date": "2026-06-03T12:00:00Z"}
     ]
 
     summary = run(
@@ -322,7 +322,7 @@ def test_run_leaves_first_time_recurring_task_unmarked() -> None:
     )
     client = MagicMock()
     client.list_active_tasks.return_value = [task]
-    client.list_completed_tasks.return_value = []
+    client.list_completed_item_activities.return_value = []
 
     summary = run(
         client=client,
@@ -347,8 +347,8 @@ def test_run_rounds_recurrence_marker_to_weeks_at_100_days() -> None:
     )
     client = MagicMock()
     client.list_active_tasks.return_value = [task]
-    client.list_completed_tasks.return_value = [
-        {"id": "seasonal", "completed_at": "2026-04-06T12:00:00Z"}
+    client.list_completed_item_activities.return_value = [
+        {"object_id": "seasonal", "event_date": "2026-04-06T12:00:00Z"}
     ]
 
     run(
@@ -381,7 +381,7 @@ def test_run_deadline_takes_precedence_over_recurrence_without_history_call() ->
         dry_run=False,
     )
 
-    client.list_completed_tasks.assert_not_called()
+    client.list_completed_item_activities.assert_not_called()
     client.update_content.assert_called_once_with(
         task_id="renew", content="[T-5d] Renew subscription"
     )
@@ -400,7 +400,7 @@ def test_run_strips_recurrence_marker_from_non_recurring_task() -> None:
         dry_run=False,
     )
 
-    client.list_completed_tasks.assert_not_called()
+    client.list_completed_item_activities.assert_not_called()
     client.update_content.assert_called_once_with(
         task_id="one-off", content="One-off task"
     )
@@ -418,8 +418,8 @@ def test_run_replaces_stale_deadline_marker_with_recurrence_marker() -> None:
     )
     client = MagicMock()
     client.list_active_tasks.return_value = [task]
-    client.list_completed_tasks.return_value = [
-        {"id": "friend-x", "completed_at": "2026-06-03T12:00:00Z"}
+    client.list_completed_item_activities.return_value = [
+        {"object_id": "friend-x", "event_date": "2026-06-03T12:00:00Z"}
     ]
 
     summary = run(
@@ -448,7 +448,7 @@ def test_run_scanned_counts_deadline_and_recurring_candidates_only() -> None:
     cleanup_only = _task("cleanup", "[T+2d] Ordinary task", None)
     client = MagicMock()
     client.list_active_tasks.return_value = [deadline, recurring, cleanup_only]
-    client.list_completed_tasks.return_value = []
+    client.list_completed_item_activities.return_value = []
 
     summary = run(
         client=client,
@@ -477,8 +477,8 @@ def test_run_recurring_subtask_never_gains_progress_suffix() -> None:
     open_child = _task("child", "Open child", None, parent_id="habit")
     client = MagicMock()
     client.list_active_tasks.return_value = [recurring_subtask, open_child]
-    client.list_completed_tasks.return_value = [
-        {"id": "habit", "completed_at": "2026-06-03T12:00:00Z"}
+    client.list_completed_item_activities.return_value = [
+        {"object_id": "habit", "event_date": "2026-06-03T12:00:00Z"}
     ]
 
     run(
@@ -504,8 +504,8 @@ def test_run_dry_run_counts_recurrence_change_without_writing() -> None:
     )
     client = MagicMock()
     client.list_active_tasks.return_value = [task]
-    client.list_completed_tasks.return_value = [
-        {"id": "friend-x", "completed_at": "2026-06-03T12:00:00Z"}
+    client.list_completed_item_activities.return_value = [
+        {"object_id": "friend-x", "event_date": "2026-06-03T12:00:00Z"}
     ]
 
     summary = run(
@@ -565,7 +565,7 @@ def test_run_normalizes_stacked_markers_when_preserving_recurrence_age() -> None
     )
     client = MagicMock()
     client.list_active_tasks.return_value = [task]
-    client.list_completed_tasks.side_effect = [[], RuntimeError("simulated")]
+    client.list_completed_item_activities.side_effect = [[], RuntimeError("simulated")]
 
     summary = run(
         client=client,
@@ -584,7 +584,7 @@ def test_run_normalizes_stacked_markers_when_preserving_recurrence_age() -> None
 def test_run_preserves_recurrence_markers_when_history_request_fails() -> None:
     client = MagicMock()
     client.list_active_tasks.return_value = _history_failure_tasks()
-    client.list_completed_tasks.side_effect = [[], RuntimeError("simulated")]
+    client.list_completed_item_activities.side_effect = [[], RuntimeError("simulated")]
 
     summary = run(
         client=client,
@@ -593,7 +593,7 @@ def test_run_preserves_recurrence_markers_when_history_request_fails() -> None:
         dry_run=False,
     )
 
-    assert client.list_completed_tasks.call_count == 2
+    assert client.list_completed_item_activities.call_count == 2
     assert client.update_content.call_args_list == [
         call(task_id="deadline", content="[T-5d] Ship release"),
         call(task_id="stale-t", content="Former deadline"),
@@ -609,9 +609,9 @@ def test_run_preserves_recurrence_markers_when_history_request_fails() -> None:
 def test_run_preserves_recurrence_markers_when_history_record_is_malformed() -> None:
     client = MagicMock()
     client.list_active_tasks.return_value = _history_failure_tasks()
-    client.list_completed_tasks.return_value = [
-        {"id": "partial", "completed_at": "2026-06-03T12:00:00Z"},
-        {"id": "unmarked", "completed_at": "not-a-timestamp"},
+    client.list_completed_item_activities.return_value = [
+        {"object_id": "partial", "event_date": "2026-06-03T12:00:00Z"},
+        {"object_id": "unmarked", "event_date": "not-a-timestamp"},
     ]
 
     summary = run(
@@ -621,7 +621,7 @@ def test_run_preserves_recurrence_markers_when_history_record_is_malformed() -> 
         dry_run=False,
     )
 
-    client.list_completed_tasks.assert_called_once()
+    client.list_completed_item_activities.assert_called_once()
     assert client.update_content.call_args_list == [
         call(task_id="deadline", content="[T-5d] Ship release"),
         call(task_id="stale-t", content="Former deadline"),

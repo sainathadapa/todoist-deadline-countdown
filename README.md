@@ -96,15 +96,15 @@ did something:
    makes Todoist schedule the next occurrence from the actual
    completion date.
 2. Complete the task after making the call.
-3. On its next successful run, the workflow reads Todoist completion
-   history and annotates the new recurring instance as
+3. On its next successful run, the workflow reads Todoist activity-log
+   completion events and annotates the new recurring instance as
    `[R+0d] Call friend X`.
 4. The count increases with elapsed local calendar days; 42 days later,
    the badge becomes `[R+42d] Call friend X`.
 5. Treat the due date as a cadence or reminder, not a deadline.
 
-If the completion-history API fails, the workflow preserves existing
-recurrence badges until a later successful run.
+If Todoist cannot return reliable activity-log history, the workflow
+preserves existing recurrence badges until a later successful run.
 
 ### How do I share this with my partner / friend?
 They make their own copy of the template with their own token. Each
